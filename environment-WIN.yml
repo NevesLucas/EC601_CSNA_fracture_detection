@@ -11,6 +11,5 @@ dependencies:
     - numpy
     - pytorch 
     - torchvision
-    - torchaudio
     - pip:
         - pytorch-directml

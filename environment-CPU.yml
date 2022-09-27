@@ -11,4 +11,3 @@ dependencies:
     - numpy
     - pytorch 
     - torchvision
-    - torchaudio
