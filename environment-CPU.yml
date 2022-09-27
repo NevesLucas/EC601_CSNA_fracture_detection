@@ -1,0 +1,14 @@
+# To run: conda env create -f environment-lnx-cuda.yml
+name: csna
+channels:
+    - conda-forge
+dependencies:
+    - python=3.9
+    - pip
+    - Pillow
+    - ipython
+    - matplotlib
+    - numpy
+    - pytorch 
+    - torchvision
+    - torchaudio
