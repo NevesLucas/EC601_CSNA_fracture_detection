@@ -6,9 +6,10 @@ dependencies:
     - python=3.6
     - pip
     - Pillow
-    - ipython
     - matplotlib
     - numpy
-    - pytorch 
-    - torchvision
+    - pandas
     - cudatoolkit=11.6
+    - pip:
+        - pytorch
+        - torchvision

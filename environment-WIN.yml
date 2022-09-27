@@ -6,10 +6,8 @@ dependencies:
     - python=3.6
     - pip
     - Pillow
-    - ipython
     - matplotlib
     - numpy
-    - pytorch 
-    - torchvision
+    - pandas
     - pip:
         - pytorch-directml
