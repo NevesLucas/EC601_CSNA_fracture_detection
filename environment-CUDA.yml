@@ -11,7 +11,7 @@ dependencies:
     - pandas
     - cudatoolkit=11.6
     - pip:
-        - pytorch
+        - torch
         - torchvision
         - kaggle
         - pydicom
