@@ -10,7 +10,7 @@ dependencies:
     - numpy
     - pandas
     - pip:
-        - pytorch
+        - torch
         - torchvision
         - kaggle
         - pydicom
