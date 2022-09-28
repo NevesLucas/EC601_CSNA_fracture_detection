@@ -13,3 +13,6 @@ dependencies:
     - pip:
         - pytorch
         - torchvision
+        - kaggle
+        - pydicom
+        - opencv-python
