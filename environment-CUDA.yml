@@ -16,3 +16,4 @@ dependencies:
         - kaggle
         - pydicom
         - opencv-python
+        - nibabel
