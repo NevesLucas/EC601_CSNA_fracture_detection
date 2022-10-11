@@ -26,3 +26,7 @@ The environment will be created according to the configuration chosen, and can t
 ```
 conda activate csna
 ```
+
+# Net selection
+
+We are tring to combine VGG-16 and UNet model to complete our project
