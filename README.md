@@ -30,4 +30,9 @@ conda activate csna
 # Net selection
 
 We are tring to use UNet model to complete our project.
-After using 
+
+After using UNet_model.py we have to setup our enivironment first. They can be activated with:
+
+```
+pip install -r requirements.txt
+```
