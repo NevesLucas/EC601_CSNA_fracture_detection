@@ -30,3 +30,4 @@ conda activate csna
 # Net selection
 
 We are tring to use UNet model to complete our project.
+After using 
