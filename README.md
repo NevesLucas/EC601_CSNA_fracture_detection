@@ -29,4 +29,4 @@ conda activate csna
 
 # Net selection
 
-We are tring to combine VGG-16 and UNet model to complete our project
+We are tring to use UNet model to complete our project.
