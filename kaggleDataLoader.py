@@ -7,6 +7,7 @@ import nibabel as nib
 import numpy as np
 import cv2
 import os
+from tqdm import tqdm
 
 RSNA_2022_PATH    = 'datasets/input/rsna-2022-cervical-spine-fracture-detection'
 TRAIN_IMAGES_PATH = f'{RSNA_2022_PATH}/train_images'
@@ -29,6 +30,18 @@ class KaggleDataLoader:
         for uid in bad_scans:
             self.trainDf.drop(self.trainDf[self.trainDf['StudyInstanceUID'] == uid].index, axis = 0, inplace = True)
 
+        #get the mappings for the data images and segmentations:
+        seg_paths = []
+        img_paths = []
+        UIDs = self.listTrainPatientID()
+        for uid in tqdm(UIDs):
+            seg_paths.append(os.path.join(self.segPath, str(uid)+".nii"))
+            img_paths.append(os.path.join(self.trainImagePath,str(uid)))
+
+        self.trainDf["seg_path"] = seg_paths
+        self.trainDf["img_paths"] = img_paths
+        self.trainDf.head()
+
     def bboxFromIndex(self, id, sliceNum):
         box = self.trainBbox.loc[(self.trainBbox.StudyInstanceUID == id & self.trainBbox.slice_number == sliceNum), :]
         return list(box.values[0])
@@ -42,9 +55,12 @@ class KaggleDataLoader:
                 fractured_bones.append('C' + str(i + 1))
         return fractured_bones
 
-    """
-    image loading function for rsna competition images, stored as 'dicom' images
-    """
+    def listTrainPatientID(self):
+        return list(self.trainDf["StudyInstanceUID"])
+
+    def listTestPatientID(self):
+        return list(self.testDf["StudyInstanceUID"])
+
 
     def loadDicom(self, path):
         img = pydicom.dcmread(path)
@@ -56,8 +72,9 @@ class KaggleDataLoader:
         data = (data * 255).astype(np.uint8)
         return cv2.cvtColor(data, cv2.COLOR_GRAY2RGB), img
 
-    def loadSliceFromId(self, patientID, sliceIndex):
-        targetPath = os.path.join(self.trainImagePath, patientID, str(sliceIndex), ".dcm")
+    def loadSliceImageFromId(self, patientID, sliceIndex):
+        imgPath = self.trainDf.loc[self.trainDf.StudyInstanceUID == patientID, "img_paths"]
+        targetPath = os.path.join(imgPath, str(sliceIndex), ".dcm")
         return self.loadDicom(targetPath)
 
     def loadSegmentationsForPatient(self, patientID):
@@ -65,8 +82,21 @@ class KaggleDataLoader:
         segmentations = segmentations[:, ::-1, ::-1]
         segmentations = segmentations.transpose(2, 1, 0)
         return segmentations
-    
-    def loadDataset(self):
+
+    ## Dataset generator functions
+    def loadDatasetAsClassifier(self):
+        """
+        prepare full dataset for training
+        """
+    def loadDatasetAsDetector(self):
+        """
+        prepare full dataset for training
+        """
+    def loadDatasetAsSegmentor(self):
+        """
+        prepare full dataset for training
+        """
+    def loadDatasetAsMaskRCNN(self):
         """
         prepare full dataset for training
         """
