@@ -26,3 +26,13 @@ The environment will be created according to the configuration chosen, and can t
 ```
 conda activate csna
 ```
+
+# Net selection
+
+We are tring to use UNet model to complete our project.
+
+After using UNet_model.py we have to setup our enivironment first. They can be activated with:
+
+```
+pip install -r requirements.txt
+```
