@@ -5,11 +5,15 @@ import pandas as pd
 import pydicom
 import nibabel as nib
 import numpy as np
+import json
 import cv2
 import os
 from tqdm import tqdm
 
-RSNA_2022_PATH    = 'datasets/input/rsna-2022-cervical-spine-fracture-detection'
+with open('config.json', 'r') as f:
+    paths = json.load(f)
+
+RSNA_2022_PATH    = paths["RSNA_2022_PATH"]
 TRAIN_IMAGES_PATH = f'{RSNA_2022_PATH}/train_images'
 TEST_IMAGES_PATH  = f'{RSNA_2022_PATH}/test_images'
 
