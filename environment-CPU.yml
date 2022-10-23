@@ -1,18 +1,11 @@
-# To run: conda env create -f environment-lnx-cuda.yml
+# To run: conda env create -f environment-CPU.yml
 name: csna
 channels:
     - conda-forge
 dependencies:
-    - python=3.6
+    - python=3.9
     - pip
-    - Pillow
     - matplotlib
-    - numpy
     - pandas
     - pip:
-        - torch
-        - torchvision
-        - kaggle
-        - pydicom
-        - opencv-python
-        - nibabel
+        - -r requirements.txt

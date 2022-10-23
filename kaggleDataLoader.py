@@ -1,6 +1,4 @@
-
-from PIL import Image
-
+import copy
 import pandas as pd
 import pydicom
 import nibabel as nib
@@ -8,8 +6,11 @@ import numpy as np
 import json
 import cv2
 import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 from tqdm import tqdm
-import random
+
+import torchio as tio
+import torch
 with open('config.json', 'r') as f:
     paths = json.load(f)
 
@@ -95,10 +96,38 @@ class KaggleDataLoader:
         return segmentations
 
     ## Dataset generator functions
-    def loadDatasetAsClassifier(self):
+    def loadDatasetAsClassifier(self, trainPercentage=0.90,train_aug=None,val_aug=None):
         """
         prepare full dataset for training
         """
+
+        HOUNSFIELD_AIR, HOUNSFIELD_BONE = -1000, 1900
+        clamp = tio.Clamp(out_min=HOUNSFIELD_AIR, out_max=HOUNSFIELD_BONE)
+        rescale = tio.RescaleIntensity(percentiles=(0.5, 99.5))
+        preprocess_intensity = tio.Compose([
+            clamp,
+            rescale,
+        ])
+        normalize_orientation = tio.ToCanonical()
+        downsample = tio.Resample(1)
+        preprocess_spatial = tio.Compose([
+            normalize_orientation,
+            downsample,
+        ])
+        preprocess = tio.Compose([
+            preprocess_intensity,
+            preprocess_spatial,
+        ])
+
+        trainSet = tio.datasets.RSNACervicalSpineFracture(RSNA_2022_PATH)
+        num_subjects = len(trainSet)
+        num_train = int(trainPercentage*num_subjects)
+        num_val = num_subjects - num_train
+        train_set, val_set = torch.utils.data.random_split(trainSet,[num_train,num_val])
+        train_set.dataset.set_transform(preprocess)
+        return train_set, val_set
+
+
     def loadDatasetAsDetector(self):
         """
         prepare full dataset for training
