@@ -10,6 +10,8 @@ dataLoader = kaggleDataLoader.KaggleDataLoader()
 
 train, val = dataLoader.loadDatasetAsSegmentor()
 
+print(len(train))
+
 subject1 = train[0]
 
 subject1.plot()

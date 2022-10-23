@@ -96,11 +96,10 @@ class KaggleDataLoader:
         return segmentations
 
     ## Dataset generator functions
-    def loadDatasetAsClassifier(self, trainPercentage=0.90,train_aug=None):
+    def loadDatasetAsClassifier(self, trainPercentage=0.90, train_aug=None):
         """
         prepare full dataset for training
         """
-
         HOUNSFIELD_AIR, HOUNSFIELD_BONE = -1000, 1900
         clamp = tio.Clamp(out_min=HOUNSFIELD_AIR, out_max=HOUNSFIELD_BONE)
         rescale = tio.RescaleIntensity(percentiles=(0.5, 99.5))
@@ -125,6 +124,15 @@ class KaggleDataLoader:
         num_val = num_subjects - num_train
         train_set, val_set = torch.utils.data.random_split(trainSet,[num_train,num_val])
         train_set.dataset.set_transform(preprocess)
+        if train_aug is not None:
+            val_set = copy.deepcopy(val_set)
+            augment = tio.Compose([
+                preprocess,
+                train_aug
+            ])
+            train_set.dataset.set_transform(augment)
+            val_set.dataset.set_transform(preprocess)
+
         return train_set, val_set
 
 
@@ -132,7 +140,7 @@ class KaggleDataLoader:
         """
         prepare full dataset for training
         """
-    def loadDatasetAsSegmentor(self, trainPercentage=0.90,train_aug=None):
+    def loadDatasetAsSegmentor(self, trainPercentage=0.90, train_aug=None):
         """
         prepare full dataset for training
         """
@@ -155,10 +163,18 @@ class KaggleDataLoader:
         ])
 
         trainSet = tio.datasets.RSNACervicalSpineFracture(RSNA_2022_PATH, add_segmentations=True)
-        trainSet =  tio.data.SubjectsDataset(list(filter( lambda seg : 'seg' in seg, trainSet.dry_iter())))
+        trainSet = tio.data.SubjectsDataset(list(filter( lambda seg : 'seg' in seg, trainSet.dry_iter())))
         num_subjects = len(trainSet)
         num_train = int(trainPercentage*num_subjects)
         num_val = num_subjects - num_train
         train_set, val_set = torch.utils.data.random_split(trainSet,[num_train,num_val])
         train_set.dataset.set_transform(preprocess)
+        if train_aug is not None:
+            val_set = copy.deepcopy(val_set)
+            augment = tio.Compose([
+                preprocess,
+                train_aug
+            ])
+            train_set.dataset.set_transform(augment)
+            val_set.dataset.set_transform(preprocess)
         return train_set, val_set
