@@ -96,7 +96,7 @@ class KaggleDataLoader:
         return segmentations
 
     ## Dataset generator functions
-    def loadDatasetAsClassifier(self, trainPercentage=0.90,train_aug=None,val_aug=None):
+    def loadDatasetAsClassifier(self, trainPercentage=0.90,train_aug=None):
         """
         prepare full dataset for training
         """
@@ -132,11 +132,33 @@ class KaggleDataLoader:
         """
         prepare full dataset for training
         """
-    def loadDatasetAsSegmentor(self):
+    def loadDatasetAsSegmentor(self, trainPercentage=0.90,train_aug=None):
         """
         prepare full dataset for training
         """
-    def loadDatasetAsMaskRCNN(self):
-        """
-        prepare full dataset for training
-        """
+        HOUNSFIELD_AIR, HOUNSFIELD_BONE = -1000, 1900
+        clamp = tio.Clamp(out_min=HOUNSFIELD_AIR, out_max=HOUNSFIELD_BONE)
+        rescale = tio.RescaleIntensity(percentiles=(0.5, 99.5))
+        preprocess_intensity = tio.Compose([
+            clamp,
+            rescale,
+        ])
+        normalize_orientation = tio.ToCanonical()
+        downsample = tio.Resample(1)
+        preprocess_spatial = tio.Compose([
+            normalize_orientation,
+            downsample,
+        ])
+        preprocess = tio.Compose([
+            preprocess_intensity,
+            preprocess_spatial,
+        ])
+
+        trainSet = tio.datasets.RSNACervicalSpineFracture(RSNA_2022_PATH, add_segmentations=True)
+        trainSet =  tio.data.SubjectsDataset(list(filter( lambda seg : 'seg' in seg, trainSet.dry_iter())))
+        num_subjects = len(trainSet)
+        num_train = int(trainPercentage*num_subjects)
+        num_val = num_subjects - num_train
+        train_set, val_set = torch.utils.data.random_split(trainSet,[num_train,num_val])
+        train_set.dataset.set_transform(preprocess)
+        return train_set, val_set
