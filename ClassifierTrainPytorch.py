@@ -47,7 +47,7 @@ dataset = kaggleDataLoader.KaggleDataLoader()
 train, val = dataset.loadDatasetAsClassifier()
 
 train_loader = DataLoader(
-    train, batch_size=2, shuffle=True, prefetch_factor=4, num_workers=8)
+    train, batch_size=4, shuffle=True, prefetch_factor=8, persistent_workers=True, num_workers=16)
 
 val_loader = DataLoader(
     val, batch_size=1, num_workers=0)
