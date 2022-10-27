@@ -7,7 +7,6 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 from torch.optim import lr_scheduler
-import pytorch_lightning as pl
 
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
 from monai.metrics import ROCAUCMetric
@@ -49,7 +48,7 @@ train, val = dataset.loadDatasetAsClassifier()
 
 sample = train[0]
 train_loader = DataLoader(
-    train, batch_size=2, shuffle=True, num_workers=0)
+    train, batch_size=2, shuffle=True, num_workers=8)
 
 val_loader = DataLoader(
     val, batch_size=1, num_workers=0)
@@ -79,7 +78,7 @@ for epoch in tqdm(range(N_EPOCHS)):
     # Loop over batches
     for batch in train_loader:
         # Send to device
-        imgs = patient['ct']['data']
+        imgs = batch['ct']['data']
 
         labels = torch.FloatTensor([[batch[target_col][line] for target_col in target_cols] for line in range(0,len(batch['C1']))])
         imgs = imgs.to(device)
@@ -109,10 +108,10 @@ for epoch in tqdm(range(N_EPOCHS)):
     # Don't update weights
     with torch.no_grad():
         # Validate
-        for patient in val_loader:
+        for batch in val_loader:
             # Reshape
-            val_imgs = patient['ct']['data']
-            val_labels = torch.FloatTensor([[patient[target_col] for target_col in target_cols]])
+            val_imgs = batch['ct']['data']
+            val_labels = torch.FloatTensor([[batch[target_col][line] for target_col in target_cols] for line in range(0,len(batch['C1']))])
 
             val_imgs = val_imgs.to(device)
             val_labels = val_labels.to(device)
