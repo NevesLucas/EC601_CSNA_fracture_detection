@@ -46,9 +46,8 @@ def competiton_loss_row_norm(y_hat, y):
 dataset = kaggleDataLoader.KaggleDataLoader()
 train, val = dataset.loadDatasetAsClassifier()
 
-sample = train[0]
 train_loader = DataLoader(
-    train, batch_size=2, shuffle=True, num_workers=8)
+    train, batch_size=2, shuffle=True, prefetch_factor=4, num_workers=8)
 
 val_loader = DataLoader(
     val, batch_size=1, num_workers=0)
