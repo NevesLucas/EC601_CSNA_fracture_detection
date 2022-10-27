@@ -49,7 +49,7 @@ train, val = dataset.loadDatasetAsClassifier()
 
 sample = train[0]
 train_loader = DataLoader(
-    train, batch_size=1, shuffle=True, num_workers=0)
+    train, batch_size=2, shuffle=True, num_workers=0)
 
 val_loader = DataLoader(
     val, batch_size=1, num_workers=0)
@@ -77,10 +77,11 @@ for epoch in tqdm(range(N_EPOCHS)):
     valid_count = 0
 
     # Loop over batches
-    for patient in train_loader:
+    for batch in train_loader:
         # Send to device
         imgs = patient['ct']['data']
-        labels = torch.FloatTensor([[patient[target_col] for target_col in target_cols]])
+
+        labels = torch.FloatTensor([[batch[target_col][line] for target_col in target_cols] for line in range(0,len(batch['C1']))])
         imgs = imgs.to(device)
         labels = labels.to(device)
 
@@ -88,6 +89,7 @@ for epoch in tqdm(range(N_EPOCHS)):
         preds = model(imgs)
         L = competiton_loss_row_norm(preds, labels)
 
+        del imgs
         # Backprop
         L.backward()
 
@@ -95,7 +97,7 @@ for epoch in tqdm(range(N_EPOCHS)):
         optimizer.step()
 
         # Zero gradients
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
 
         # Track loss
         loss_acc += L.detach().item()
