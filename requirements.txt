@@ -12,3 +12,4 @@ pylibjpeg-libjpeg
 torchio
 pydicom
 joblib
+pandas
