@@ -74,10 +74,10 @@ train, val = dataset.loadDatasetAsClassifier()
 train = cachingDataset(train)
 
 train_loader = DataLoader(
-    train, batch_size=1, shuffle=True, prefetch_factor=2, persistent_workers=False, num_workers=0)
+    train, batch_size=1, shuffle=True, prefetch_factor=4, persistent_workers=False, num_workers=16)
 
 val_loader = DataLoader(
-    val, batch_size=1, num_workers=0)
+    val, batch_size=1, num_workers=16)
 
 n_epochs = 10
 model = DenseNet121(spatial_dims=3, in_channels=1, out_channels=8).to(device)
