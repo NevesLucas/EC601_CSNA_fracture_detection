@@ -116,7 +116,6 @@ for epoch in tqdm(range(N_EPOCHS)):
 
         # Backprop
         L.backward()
-        del imgs
         # Update parameters
         optimizer.step()
 
@@ -144,10 +143,10 @@ for epoch in tqdm(range(N_EPOCHS)):
             # Forward pass
             val_preds = model(val_imgs)
             val_L = competiton_loss_row_norm(val_preds, val_labels)
-            del val_imgs
             # Track loss
             val_loss_acc += val_L.item()
             valid_count += 1
+            print("finished validation batch")
 
     # Save loss history
     loss_hist.append(loss_acc / train_count)
