@@ -72,7 +72,7 @@ dataset = kaggleDataLoader.KaggleDataLoader()
 train, val = dataset.loadDatasetAsClassifier()
 
 train = cachingDataset(train)
-
+val = cachingDataset(val)
 train_loader = DataLoader(
     train, batch_size=1, shuffle=True, prefetch_factor=4, persistent_workers=False, num_workers=16)
 
