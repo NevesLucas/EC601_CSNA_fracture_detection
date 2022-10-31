@@ -1,7 +1,7 @@
 import kaggleDataLoader
 import math
 import time
-import matplotlib as plt
+from matplotlib import pyplot as plt
 import numpy as np
 from tqdm import tqdm
 import torch
@@ -16,6 +16,8 @@ from monai.networks.nets import DenseNet121
 loss_fn = nn.BCEWithLogitsLoss(reduction='none')
 
 root_dir="./"
+if torch.cuda.is_available():
+     print("GPU enabled")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 target_cols = ['C1', 'C2', 'C3',
@@ -47,10 +49,10 @@ dataset = kaggleDataLoader.KaggleDataLoader()
 train, val = dataset.loadDatasetAsClassifier()
 
 train_loader = DataLoader(
-    train, batch_size=4, shuffle=True, prefetch_factor=8, persistent_workers=True, num_workers=16)
+    train, batch_size=1, shuffle=True, prefetch_factor=6, persistent_workers=True, num_workers=16)
 
 val_loader = DataLoader(
-    val, batch_size=1, num_workers=0)
+    val, batch_size=1, num_workers=16)
 
 n_epochs = 10
 model = DenseNet121(spatial_dims=3, in_channels=1, out_channels=8).to(device)
@@ -67,7 +69,7 @@ val_loss_hist = []
 patience_counter = 0
 best_val_loss = np.inf
 #https://www.kaggle.com/code/samuelcortinhas/rnsa-3d-model-train-pytorch
-# Loop over epochs
+#Loop over epochs
 for epoch in tqdm(range(N_EPOCHS)):
     loss_acc = 0
     val_loss_acc = 0
@@ -87,20 +89,19 @@ for epoch in tqdm(range(N_EPOCHS)):
         preds = model(imgs)
         L = competiton_loss_row_norm(preds, labels)
 
-        del imgs
         # Backprop
         L.backward()
-
+        del imgs
         # Update parameters
         optimizer.step()
 
         # Zero gradients
-        optimizer.zero_grad(set_to_none=True)
+        optimizer.zero_grad()
 
         # Track loss
         loss_acc += L.detach().item()
         train_count += 1
-
+        print("finished batch")
     # Update learning rate
     scheduler.step()
 
@@ -118,7 +119,7 @@ for epoch in tqdm(range(N_EPOCHS)):
             # Forward pass
             val_preds = model(val_imgs)
             val_L = competiton_loss_row_norm(val_preds, val_labels)
-
+            del val_imgs
             # Track loss
             val_loss_acc += val_L.item()
             valid_count += 1
