@@ -1,6 +1,6 @@
 import kaggleDataLoader
-import math
-import time
+import json
+from joblib import Memory
 from matplotlib import pyplot as plt
 import numpy as np
 from tqdm import tqdm
@@ -11,6 +11,29 @@ from torch.optim import lr_scheduler
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
 from monai.metrics import ROCAUCMetric
 from monai.networks.nets import DenseNet121
+
+with open('config.json', 'r') as f:
+    paths = json.load(f)
+
+cachedir = paths["CACHE_DIR"]
+memory = Memory(cachedir, verbose=0, compress=True)
+
+def cacheFunc(data, indexes):
+    return data[indexes]
+
+cacheFunc = memory.cache(cacheFunc)
+
+class cachingDataset(Dataset):
+
+    def __init__(self, data):
+        self.dataset = data
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        return cacheFunc(self.dataset,idx)
+
 
 # Replicate competition metric (https://www.kaggle.com/competitions/rsna-2022-cervical-spine-fracture-detection/discussion/341854)
 loss_fn = nn.BCEWithLogitsLoss(reduction='none')
@@ -48,11 +71,13 @@ def competiton_loss_row_norm(y_hat, y):
 dataset = kaggleDataLoader.KaggleDataLoader()
 train, val = dataset.loadDatasetAsClassifier()
 
+train = cachingDataset(train)
+
 train_loader = DataLoader(
-    train, batch_size=1, shuffle=True, prefetch_factor=6, persistent_workers=True, num_workers=16)
+    train, batch_size=1, shuffle=True, prefetch_factor=2, persistent_workers=False, num_workers=0)
 
 val_loader = DataLoader(
-    val, batch_size=1, num_workers=16)
+    val, batch_size=1, num_workers=0)
 
 n_epochs = 10
 model = DenseNet121(spatial_dims=3, in_channels=1, out_channels=8).to(device)
@@ -163,5 +188,5 @@ plt.title('Competition metric')
 plt.xlabel('Epoch')
 plt.ylabel('Loss')
 plt.legend()
+plt.savefig("train_result.png")
 plt.show()
-

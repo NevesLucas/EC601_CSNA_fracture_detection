@@ -11,3 +11,4 @@ pylibjpeg
 pylibjpeg-libjpeg
 torchio
 pydicom
+joblib
