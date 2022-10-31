@@ -117,8 +117,8 @@ class KaggleDataLoader:
             cropOrPad,
         ])
         preprocess = tio.Compose([
-            preprocess_intensity,
             preprocess_spatial,
+            preprocess_intensity,
         ])
 
         trainSet = tio.datasets.RSNACervicalSpineFracture(RSNA_2022_PATH)
@@ -145,6 +145,7 @@ class KaggleDataLoader:
         """
         prepare full dataset for training
         """
+
     def loadDatasetAsSegmentor(self, trainPercentage=0.90, train_aug=None):
         """
         prepare full dataset for training
@@ -158,15 +159,17 @@ class KaggleDataLoader:
         ])
         normalize_orientation = tio.ToCanonical()
         downsample = tio.Resample(1)
+
+        cropOrPad = tio.CropOrPad((130,130,200))
         preprocess_spatial = tio.Compose([
             normalize_orientation,
             downsample,
+            cropOrPad,
         ])
         preprocess = tio.Compose([
-            preprocess_intensity,
             preprocess_spatial,
+            preprocess_intensity,
         ])
-
         trainSet = tio.datasets.RSNACervicalSpineFracture(RSNA_2022_PATH, add_segmentations=True)
         trainSet = tio.data.SubjectsDataset(list(filter( lambda seg : 'seg' in seg, trainSet.dry_iter())))
         num_subjects = len(trainSet)

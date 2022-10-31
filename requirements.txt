@@ -1,7 +1,7 @@
 scipy
 numpy
 matplotlib
-opencv_python
+opencv-python
 torch
 torchvision
 tqdm
@@ -11,3 +11,4 @@ pylibjpeg
 pylibjpeg-libjpeg
 torchio
 pydicom
+joblib
