@@ -7,7 +7,7 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 from torch.optim import lr_scheduler
-
+import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
 from monai.metrics import ROCAUCMetric
 from monai.networks.nets import DenseNet121
@@ -178,6 +178,10 @@ for epoch in tqdm(range(N_EPOCHS)):
 
 print('')
 print('Training complete!')
+# log loss
+data = {'val_loss':val_loss_hist,'loss':loss_hist}
+df = pd.DataFrame(data=data)
+df.to_csv("results.csv", sep='\t')
 
 # Plot loss
 plt.figure(figsize=(10,5))
