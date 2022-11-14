@@ -61,7 +61,7 @@ competition_weights = {
 # y.shape = (batch_size, num_classes)
 
 dataset = kaggleDataLoader.KaggleDataLoader()
-train, val = dataset.loadDatasetAsSegmenter()
+train, val = dataset.loadDatasetAsSegmentor()
 
 train = cachingDataset(train)
 val = cachingDataset(val)
