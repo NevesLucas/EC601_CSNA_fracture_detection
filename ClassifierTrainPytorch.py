@@ -69,7 +69,13 @@ def competiton_loss_row_norm(y_hat, y):
     return loss.mean()
 
 dataset = kaggleDataLoader.KaggleDataLoader()
-train, val = dataset.loadDatasetAsClassifier()
+train, val = dataset.loadDatasetAsSegmentor()
+
+
+# TODO: use Segmentation ground truth data to crop train and val volumees into Regions of interest
+
+#train = CroppedROITrainSet
+#val = CroppedROIValSet
 
 train = cachingDataset(train)
 val = cachingDataset(val)
