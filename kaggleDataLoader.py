@@ -166,9 +166,14 @@ class KaggleDataLoader:
             downsample,
             cropOrPad,
         ])
+        sequential = tio.SequentialLabels()
+        remapping = [2,3,4,5,6,7,8,9]
+        remap_mask = tio.RemoveLabels(remapping,background_label=1)
         preprocess = tio.Compose([
+            sequential,
+            remap_mask,
             preprocess_spatial,
-            preprocess_intensity,
+            preprocess_intensity
         ])
         trainSet = tio.datasets.RSNACervicalSpineFracture(RSNA_2022_PATH, add_segmentations=True)
         trainSet = tio.data.SubjectsDataset(list(filter( lambda seg : 'seg' in seg, trainSet.dry_iter())))

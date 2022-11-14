@@ -10,7 +10,8 @@ from torch.optim import lr_scheduler
 import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
 from monai.metrics import ROCAUCMetric
-from monai.networks.nets import DenseNet121
+from monai.losses.dice import DiceLoss
+from monai.networks.nets import BasicUNet
 
 with open('config.json', 'r') as f:
     paths = json.load(f)
@@ -59,34 +60,28 @@ competition_weights = {
 # y_hat.shape = (batch_size, num_classes)
 # y.shape = (batch_size, num_classes)
 
-# with row-wise weights normalization (https://www.kaggle.com/competitions/rsna-2022-cervical-spine-fracture-detection/discussion/344565)
-def competiton_loss_row_norm(y_hat, y):
-    loss = loss_fn(y_hat, y.to(y_hat.dtype))
-    weights = y * competition_weights['+'] + (1 - y) * competition_weights['-']
-    loss = (loss * weights).sum(axis=1)
-    w_sum = weights.sum(axis=1)
-    loss = torch.div(loss, w_sum)
-    return loss.mean()
-
 dataset = kaggleDataLoader.KaggleDataLoader()
-train, val = dataset.loadDatasetAsClassifier()
+train, val = dataset.loadDatasetAsSegmentor()
 
 train = cachingDataset(train)
 val = cachingDataset(val)
 train_loader = DataLoader(
-    train, batch_size=4, shuffle=True, prefetch_factor=4, persistent_workers=True, drop_last=True, num_workers=16)
+    train, batch_size=1, shuffle=True, prefetch_factor=4, persistent_workers=True, drop_last=True, num_workers=16)
 
 val_loader = DataLoader(
     val, batch_size=1, num_workers=8)
 
 n_epochs = 10
-model = DenseNet121(spatial_dims=3, in_channels=1, out_channels=8).to(device)
-optimizer = torch.optim.Adam(model.parameters(), 1e-5)
+model = BasicUNet(spatial_dims=3, in_channels=1, out_channels=1).to(device)
+
+optimizer = torch.optim.Adam(model.parameters(), 1e-4)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
+loss = DiceLoss()
 val_interval = 1
+
 auc_metric = ROCAUCMetric()
 
-N_EPOCHS = 20
+N_EPOCHS = 100
 PATIENCE = 3
 
 loss_hist = []
@@ -106,13 +101,13 @@ for epoch in tqdm(range(N_EPOCHS)):
         # Send to device
         imgs = batch['ct']['data']
 
-        labels = torch.FloatTensor([[batch[target_col][line] for target_col in target_cols] for line in range(0,len(batch['C1']))])
+        labels = batch['seg']['data']
         imgs = imgs.to(device)
         labels = labels.to(device)
 
         # Forward pass
         preds = model(imgs)
-        L = competiton_loss_row_norm(preds, labels)
+        L = loss(preds, labels)
 
         # Backprop
         L.backward()
@@ -135,14 +130,14 @@ for epoch in tqdm(range(N_EPOCHS)):
         for batch in val_loader:
             # Reshape
             val_imgs = batch['ct']['data']
-            val_labels = torch.FloatTensor([[batch[target_col][line] for target_col in target_cols] for line in range(0,len(batch['C1']))])
+            val_labels = batch['seg']['data']
 
             val_imgs = val_imgs.to(device)
             val_labels = val_labels.to(device)
 
             # Forward pass
             val_preds = model(val_imgs)
-            val_L = competiton_loss_row_norm(val_preds, val_labels)
+            val_L = loss(val_preds, val_labels)
             # Track loss
             val_loss_acc += val_L.item()
             valid_count += 1
@@ -169,7 +164,7 @@ for epoch in tqdm(range(N_EPOCHS)):
             'scheduler_state_dict': scheduler.state_dict(),
             'loss': loss_acc / train_count,
             'val_loss': val_loss_acc / valid_count,
-        }, "Conv3DNet.pt")
+        }, "Unet3D.pt")
     else:
         patience_counter += 1
 
@@ -187,7 +182,7 @@ df.to_csv("results.csv", sep='\t')
 plt.figure(figsize=(10,5))
 plt.plot(loss_hist, c='C0', label='loss')
 plt.plot(val_loss_hist, c='C1', label='val_loss')
-plt.title('Competition metric')
+plt.title('DiceLoss')
 plt.xlabel('Epoch')
 plt.ylabel('Loss')
 plt.legend()
