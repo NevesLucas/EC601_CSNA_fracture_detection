@@ -11,7 +11,7 @@ import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
 from monai.metrics import ROCAUCMetric
 from monai.losses.dice import DiceLoss
-from monai.networks.nets import BasicUnet
+from monai.networks.nets import BasicUNet
 
 with open('config.json', 'r') as f:
     paths = json.load(f)
