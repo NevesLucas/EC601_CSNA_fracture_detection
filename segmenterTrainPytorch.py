@@ -12,6 +12,7 @@ from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
 from monai.metrics import ROCAUCMetric
 from monai.losses.dice import DiceLoss
 from monai.networks.nets import BasicUNet
+import torch.cuda.amp as amp
 
 with open('config.json', 'r') as f:
     paths = json.load(f)
@@ -44,22 +45,6 @@ if torch.cuda.is_available():
      print("GPU enabled")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-target_cols = ['C1', 'C2', 'C3',
-               'C4', 'C5', 'C6', 'C7',
-               'patient_overall']
-
-
-# Replicate competition metric (https://www.kaggle.com/competitions/rsna-2022-cervical-spine-fracture-detection/discussion/341854)
-loss_fn = nn.BCEWithLogitsLoss(reduction='none')
-
-competition_weights = {
-    '-' : torch.tensor([1, 1, 1, 1, 1, 1, 1, 7], dtype=torch.float, device=device),
-    '+' : torch.tensor([2, 2, 2, 2, 2, 2, 2, 14], dtype=torch.float, device=device),
-}
-
-# y_hat.shape = (batch_size, num_classes)
-# y.shape = (batch_size, num_classes)
-
 dataset = kaggleDataLoader.KaggleDataLoader()
 train, val = dataset.loadDatasetAsSegmentor()
 
@@ -71,18 +56,20 @@ train_loader = DataLoader(
 val_loader = DataLoader(
     val, batch_size=1, num_workers=8)
 
-n_epochs = 10
-model = BasicUNet(spatial_dims=3, in_channels=1, out_channels=1).to(device)
+N_EPOCHS = 500
+model = BasicUNet(spatial_dims=3,
+                  in_channels=1,
+                  out_channels=1).to(device)
 
-optimizer = torch.optim.Adam(model.parameters(), 1e-4)
-scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
+optimizer = torch.optim.Adam(model.parameters(), 1e-3)
+scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
+scaler = amp.GradScaler()
 loss = DiceLoss()
 val_interval = 1
 
 auc_metric = ROCAUCMetric()
 
-N_EPOCHS = 100
-PATIENCE = 3
+PATIENCE = 10
 
 loss_hist = []
 val_loss_hist = []
@@ -98,6 +85,8 @@ for epoch in tqdm(range(N_EPOCHS)):
 
     # Loop over batches
     for batch in train_loader:
+        # Zero gradients
+        optimizer.zero_grad()
         # Send to device
         imgs = batch['ct']['data']
 
@@ -106,16 +95,19 @@ for epoch in tqdm(range(N_EPOCHS)):
         labels = labels.to(device)
 
         # Forward pass
-        preds = model(imgs)
-        L = loss(preds, labels)
+        with amp.autocast(dtype=torch.float16):
+             preds = model(imgs)
+             L = loss(preds, labels)
 
         # Backprop
-        L.backward()
+        scaler.scale(L).backward()
+        scaler.step(optimizer)
+        scaler.update()
+#        L.backward()
         # Update parameters
-        optimizer.step()
+#        optimizer.step()
 
-        # Zero gradients
-        optimizer.zero_grad()
+
 
         # Track loss
         loss_acc += L.detach().item()
@@ -143,6 +135,8 @@ for epoch in tqdm(range(N_EPOCHS)):
             valid_count += 1
             print("finished validation batch")
 
+    loss_acc = abs(loss_acc)
+    val_loss_acc = abs(val_loss_acc)
     # Save loss history
     loss_hist.append(loss_acc / train_count)
     val_loss_hist.append(val_loss_acc / valid_count)
@@ -170,7 +164,6 @@ for epoch in tqdm(range(N_EPOCHS)):
 
         if patience_counter == PATIENCE:
             break
-
 print('')
 print('Training complete!')
 # log loss
