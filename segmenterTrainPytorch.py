@@ -50,7 +50,7 @@ if torch.cuda.is_available():
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 dataset = kaggleDataLoader.KaggleDataLoader()
-train, val = dataset.loadDatasetAsSegmentor()
+train, val = dataset.loadDatasetAsSegmentor(trainPercentage=0.80)
 
 train = cachingDataset(train)
 val = cachingDataset(val)
@@ -65,7 +65,7 @@ model = BasicUNet(spatial_dims=3,
                   in_channels=1,
                   out_channels=1).to(device)
 
-optimizer = torch.optim.Adam(model.parameters(), 1e-5)
+optimizer = torch.optim.Adam(model.parameters(), 1e-4)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
 scaler = amp.GradScaler()
 loss = DiceLoss()
