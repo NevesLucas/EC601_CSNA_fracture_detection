@@ -10,6 +10,9 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 from tqdm import tqdm
 
 import torchio as tio
+tio.Subject.relative_attribute_tolerance = 1e-5 # applies to all instances since it is a static attribute
+tio.Subject.absolute_attribute_tolerance = 1e-5
+
 import torch
 with open('config.json', 'r') as f:
     paths = json.load(f)
@@ -165,6 +168,7 @@ class KaggleDataLoader:
         """
         prepare full dataset for training
         """
+
         HOUNSFIELD_AIR, HOUNSFIELD_BONE = -1000, 1900
         clamp = tio.Clamp(out_min=HOUNSFIELD_AIR, out_max=HOUNSFIELD_BONE)
         rescale = tio.RescaleIntensity(percentiles=(0.5, 99.5))
@@ -173,11 +177,11 @@ class KaggleDataLoader:
             rescale,
         ])
         normalize_orientation = tio.ToCanonical()
-        downsample = tio.Resample(1)
-        cropOrPad = tio.CropOrPad((130,130,200))
+        downsample = tio.Resample(2)
+        cropOrPad = tio.CropOrPad((128,128,200))
         preprocess_spatial = tio.Compose([
-            downsample,
             normalize_orientation,
+            downsample,
             cropOrPad,
         ])
         sequential = tio.SequentialLabels()
