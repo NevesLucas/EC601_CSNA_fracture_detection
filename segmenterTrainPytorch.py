@@ -7,6 +7,7 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 from torch.optim import lr_scheduler
+import torch.cuda.amp as amp
 import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
 from monai.metrics import ROCAUCMetric
@@ -35,6 +36,10 @@ class cachingDataset(Dataset):
     def __getitem__(self, idx):
         return cacheFunc(self.dataset,idx)
 
+
+# Replicate competition metric (https://www.kaggle.com/competitions/rsna-2022-cervical-spine-fracture-detection/discussion/341854)
+loss_fn = nn.BCEWithLogitsLoss(reduction='none')
+
 root_dir="./"
 if torch.cuda.is_available():
      print("GPU enabled")
@@ -56,8 +61,9 @@ model = UNet(spatial_dims=3,
              in_channels=1,
              out_channels=1,
              channels=(4, 8, 16, 32, 64, 128),
-             strides=(1, 1, 1, 1, 1)).to(device)
+             strides=(2, 2, 2, 2, 2)).to(device)
 
+scaler = torch.cuda.amp.GradScaler()
 optimizer = torch.optim.Adam(model.parameters(), 1e-3)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
 loss = DiceLoss(reduction='none')
@@ -81,24 +87,26 @@ for epoch in tqdm(range(N_EPOCHS)):
 
     # Loop over batches
     for batch in train_loader:
-        # Send to device
+
+        # Zero gradients
+        optimizer.zero_grad()
         imgs = batch['ct']['data']
 
         labels = batch['seg']['data']
+        # Send to device
         imgs = imgs.to(device)
         labels = labels.to(device)
 
         # Forward pass
-        preds = model(imgs)
-        L = loss(preds, labels)
-
+        with amp.autocast():
+            preds = model(imgs)
+            L = loss(preds, labels)
         # Backprop
-        L.backward()
+        scaler.scale(L).backward()
+        scaler.step(optimizer)
         # Update parameters
-        optimizer.step()
+        scaler.update()
 
-        # Zero gradients
-        optimizer.zero_grad()
 
         # Track loss
         loss_acc += L.detach().item()
