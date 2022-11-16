@@ -180,11 +180,13 @@ class KaggleDataLoader:
             cropOrPad,
         ])
         sequential = tio.SequentialLabels()
-        remapping = [2,3,4,5,6,7,8,9]
-        remap_mask = tio.RemoveLabels(remapping,background_label=1)
+        remapping = {2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1}
+        remap_mask = tio.RemapLabels(remapping)
+        oneHot = tio.OneHot(-1)
         preprocess = tio.Compose([
             sequential,
             remap_mask,
+            oneHot,
             preprocess_spatial,
             preprocess_intensity
         ])

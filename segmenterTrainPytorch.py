@@ -11,7 +11,7 @@ import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
 from monai.metrics import ROCAUCMetric
 from monai.losses.dice import DiceLoss
-from monai.networks.nets import BasicUNet
+from monai.networks.nets import UNet
 
 with open('config.json', 'r') as f:
     paths = json.load(f)
@@ -35,30 +35,10 @@ class cachingDataset(Dataset):
     def __getitem__(self, idx):
         return cacheFunc(self.dataset,idx)
 
-
-# Replicate competition metric (https://www.kaggle.com/competitions/rsna-2022-cervical-spine-fracture-detection/discussion/341854)
-loss_fn = nn.BCEWithLogitsLoss(reduction='none')
-
 root_dir="./"
 if torch.cuda.is_available():
      print("GPU enabled")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-target_cols = ['C1', 'C2', 'C3',
-               'C4', 'C5', 'C6', 'C7',
-               'patient_overall']
-
-
-# Replicate competition metric (https://www.kaggle.com/competitions/rsna-2022-cervical-spine-fracture-detection/discussion/341854)
-loss_fn = nn.BCEWithLogitsLoss(reduction='none')
-
-competition_weights = {
-    '-' : torch.tensor([1, 1, 1, 1, 1, 1, 1, 7], dtype=torch.float, device=device),
-    '+' : torch.tensor([2, 2, 2, 2, 2, 2, 2, 14], dtype=torch.float, device=device),
-}
-
-# y_hat.shape = (batch_size, num_classes)
-# y.shape = (batch_size, num_classes)
 
 dataset = kaggleDataLoader.KaggleDataLoader()
 train, val = dataset.loadDatasetAsSegmentor()
@@ -71,12 +51,16 @@ train_loader = DataLoader(
 val_loader = DataLoader(
     val, batch_size=1, num_workers=8)
 
-N_EPOCHS = 100
-model = BasicUNet(spatial_dims=3, in_channels=1, out_channels=1).to(device)
+N_EPOCHS = 500
+model = UNet(spatial_dims=3,
+             in_channels=1,
+             out_channels=1,
+             channels=(4, 8, 16, 32, 64, 128),
+             strides=(1, 1, 1, 1, 1)).to(device)
 
-optimizer = torch.optim.Adam(model.parameters(), 1e-5)
+optimizer = torch.optim.Adam(model.parameters(), 1e-3)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
-loss = DiceLoss()
+loss = DiceLoss(reduction='none')
 val_interval = 1
 
 auc_metric = ROCAUCMetric()
@@ -142,6 +126,8 @@ for epoch in tqdm(range(N_EPOCHS)):
             valid_count += 1
             print("finished validation batch")
 
+    loss_acc = abs(loss_acc)
+    val_loss_acc = abs(val_loss_acc)
     # Save loss history
     loss_hist.append(loss_acc / train_count)
     val_loss_hist.append(val_loss_acc / valid_count)
