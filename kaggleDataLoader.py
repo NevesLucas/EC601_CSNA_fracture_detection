@@ -30,11 +30,7 @@ revert_dict = {
     '1.2.826.0.1.3680043.2243',
     '1.2.826.0.1.3680043.24606',
     '1.2.826.0.1.3680043.32071',
-    '1.2.826.0.1.3680043.20756',
-    '1.2.826.0.1.3680043.29952',
-    '1.2.826.0.1.3680043.8362',
     '1.2.826.0.1.3680043.20574'
-
 }
 
 
@@ -180,8 +176,8 @@ class KaggleDataLoader:
         cropOrPad = tio.CropOrPad((128,128,200))
         preprocess_spatial = tio.Compose([
             normalize_orientation,
-            transform,
             downsample,
+            transform,
             cropOrPad,
         ])
         sequential = tio.SequentialLabels()
@@ -190,8 +186,8 @@ class KaggleDataLoader:
         preprocess = tio.Compose([
             sequential,
             remap_mask,
-            preprocess_intensity,
-            preprocess_spatial
+            preprocess_spatial,
+            preprocess_intensity
         ])
         trainSet = tio.datasets.RSNACervicalSpineFracture(RSNA_2022_PATH, add_segmentations=True)
         trainSet = tio.data.SubjectsDataset(list(filter( lambda seg : 'seg' in seg, trainSet.dry_iter())))
