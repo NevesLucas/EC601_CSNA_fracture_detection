@@ -164,11 +164,6 @@ for epoch in tqdm(range(N_EPOCHS)):
             'loss': loss_acc / train_count,
             'val_loss': val_loss_acc / valid_count,
         }, "Unet3D.pt")
-    else:
-        patience_counter += 1
-
-        if patience_counter == PATIENCE:
-            break
 
 print('')
 print('Training complete!')
