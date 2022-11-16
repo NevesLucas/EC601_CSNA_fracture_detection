@@ -10,8 +10,6 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 from tqdm import tqdm
 
 import torchio as tio
-tio.Subject.relative_attribute_tolerance = 2 # applies to all instances since it is a static attribute
-tio.Subject.absolute_attribute_tolerance = 2
 
 import torch
 with open('config.json', 'r') as f:
@@ -177,10 +175,12 @@ class KaggleDataLoader:
             rescale,
         ])
         normalize_orientation = tio.ToCanonical()
-        downsample = tio.Resample(2)
+        transform = tio.Resample('data')
+        downsample = tio.Resample(1)
         cropOrPad = tio.CropOrPad((128,128,200))
         preprocess_spatial = tio.Compose([
             normalize_orientation,
+            transform,
             downsample,
             cropOrPad,
         ])
@@ -190,8 +190,8 @@ class KaggleDataLoader:
         preprocess = tio.Compose([
             sequential,
             remap_mask,
-            preprocess_spatial,
-            preprocess_intensity
+            preprocess_intensity,
+            preprocess_spatial
         ])
         trainSet = tio.datasets.RSNACervicalSpineFracture(RSNA_2022_PATH, add_segmentations=True)
         trainSet = tio.data.SubjectsDataset(list(filter( lambda seg : 'seg' in seg, trainSet.dry_iter())))
