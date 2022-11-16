@@ -11,7 +11,8 @@ import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
 from monai.metrics import ROCAUCMetric
 from monai.losses.dice import DiceLoss
-from monai.networks.nets import BasicUNetPlusPlus
+from monai.networks.nets import BasicUNet
+import torch.cuda.amp as amp
 
 with open('config.json', 'r') as f:
     paths = json.load(f)
@@ -56,13 +57,14 @@ val_loader = DataLoader(
     val, batch_size=1, num_workers=8)
 
 N_EPOCHS = 500
-model = BasicUNetPlusPlus(spatial_dims=3,
-                          in_channels=1,
-                          out_channels=1).to(device)
+model = BasicUNet(spatial_dims=3,
+                  in_channels=1,
+                  out_channels=1).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), 1e-3)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
-loss = DiceLoss(reduction='none')
+scaler = amp.GradScaler()
+loss = DiceLoss()
 val_interval = 1
 
 auc_metric = ROCAUCMetric()
@@ -83,6 +85,8 @@ for epoch in tqdm(range(N_EPOCHS)):
 
     # Loop over batches
     for batch in train_loader:
+        # Zero gradients
+        optimizer.zero_grad()
         # Send to device
         imgs = batch['ct']['data']
 
@@ -91,16 +95,19 @@ for epoch in tqdm(range(N_EPOCHS)):
         labels = labels.to(device)
 
         # Forward pass
-        preds = model(imgs)
-        L = loss(preds, labels)
+        with amp.autocast(dtype=torch.float16):
+             preds = model(imgs)
+             L = loss(preds, labels)
 
         # Backprop
-        L.backward()
+        scaler.scale(L).backward()
+        scaler.step(optimizer)
+        scaler.update()
+#        L.backward()
         # Update parameters
-        optimizer.step()
+#        optimizer.step()
 
-        # Zero gradients
-        optimizer.zero_grad()
+
 
         # Track loss
         loss_acc += L.detach().item()
