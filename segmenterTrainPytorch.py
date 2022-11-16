@@ -71,18 +71,17 @@ train_loader = DataLoader(
 val_loader = DataLoader(
     val, batch_size=1, num_workers=8)
 
-n_epochs = 10
+N_EPOCHS = 100
 model = BasicUNet(spatial_dims=3, in_channels=1, out_channels=1).to(device)
 
-optimizer = torch.optim.Adam(model.parameters(), 1e-4)
-scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
+optimizer = torch.optim.Adam(model.parameters(), 1e-5)
+scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
 loss = DiceLoss()
 val_interval = 1
 
 auc_metric = ROCAUCMetric()
 
-N_EPOCHS = 100
-PATIENCE = 3
+PATIENCE = 5
 
 loss_hist = []
 val_loss_hist = []

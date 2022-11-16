@@ -33,7 +33,6 @@ revert_dict = {
     '1.2.826.0.1.3680043.20574'
 }
 
-
 def loadDicom(path):
     img = pydicom.dcmread(path)
     img.PhotometricInterpretation = 'YBR_FULL'
