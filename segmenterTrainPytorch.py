@@ -7,7 +7,6 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 from torch.optim import lr_scheduler
-import torch.cuda.amp as amp
 import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
 from monai.metrics import ROCAUCMetric
@@ -61,7 +60,6 @@ model = BasicUNetPlusPlus(spatial_dims=3,
                           in_channels=1,
                           out_channels=1).to(device)
 
-scaler = torch.cuda.amp.GradScaler()
 optimizer = torch.optim.Adam(model.parameters(), 1e-3)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
 loss = DiceLoss(reduction='none')
@@ -85,26 +83,24 @@ for epoch in tqdm(range(N_EPOCHS)):
 
     # Loop over batches
     for batch in train_loader:
-
-        # Zero gradients
-        optimizer.zero_grad()
+        # Send to device
         imgs = batch['ct']['data']
 
         labels = batch['seg']['data']
-        # Send to device
         imgs = imgs.to(device)
         labels = labels.to(device)
 
         # Forward pass
-        with amp.autocast():
-            preds = model(imgs)
-            L = loss(preds, labels)
-        # Backprop
-        scaler.scale(L).backward()
-        scaler.step(optimizer)
-        # Update parameters
-        scaler.update()
+        preds = model(imgs)
+        L = loss(preds, labels)
 
+        # Backprop
+        L.backward()
+        # Update parameters
+        optimizer.step()
+
+        # Zero gradients
+        optimizer.zero_grad()
 
         # Track loss
         loss_acc += L.detach().item()
