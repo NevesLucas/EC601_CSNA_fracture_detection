@@ -60,8 +60,8 @@ N_EPOCHS = 500
 model = UNet(spatial_dims=3,
              in_channels=1,
              out_channels=1,
-             channels=(4, 8, 16, 32, 64, 128),
-             strides=(2, 2, 2, 2, 2)).to(device)
+             channels=(4, 8, 16, 32, 64),
+             strides=(2, 2, 2, 2)).to(device)
 
 scaler = torch.cuda.amp.GradScaler()
 optimizer = torch.optim.Adam(model.parameters(), 1e-3)
