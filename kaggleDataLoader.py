@@ -23,6 +23,14 @@ target_cols = ['C1', 'C2', 'C3',
                'C4', 'C5', 'C6', 'C7',
                'patient_overall']
 
+revert_dict = {
+    '1.2.826.0.1.3680043.1363',
+    '1.2.826.0.1.3680043.20120',
+    '1.2.826.0.1.3680043.2243',
+    '1.2.826.0.1.3680043.24606',
+    '1.2.826.0.1.3680043.32071'
+}
+
 
 def loadDicom(path):
     img = pydicom.dcmread(path)
@@ -122,6 +130,8 @@ class KaggleDataLoader:
         ])
 
         trainSet = tio.datasets.RSNACervicalSpineFracture(RSNA_2022_PATH)
+        #strip out bad entries
+        trainSet = tio.data.SubjectsDataset(list(filter( lambda subject : subject.StudyInstanceUID not in revert_dict, trainSet.dry_iter())))
         num_subjects = len(trainSet)
         num_train = int(trainPercentage*num_subjects)
         num_val = num_subjects - num_train
@@ -176,6 +186,9 @@ class KaggleDataLoader:
         ])
         trainSet = tio.datasets.RSNACervicalSpineFracture(RSNA_2022_PATH, add_segmentations=True)
         trainSet = tio.data.SubjectsDataset(list(filter( lambda seg : 'seg' in seg, trainSet.dry_iter())))
+
+        #strip out bad entries
+        trainSet = tio.data.SubjectsDataset(list(filter( lambda subject : subject.StudyInstanceUID not in revert_dict, trainSet.dry_iter())))
         num_subjects = len(trainSet)
         num_train = int(trainPercentage*num_subjects)
         num_val = num_subjects - num_train
