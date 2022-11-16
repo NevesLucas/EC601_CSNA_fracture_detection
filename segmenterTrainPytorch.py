@@ -13,6 +13,7 @@ from monai.metrics import ROCAUCMetric
 from monai.losses.dice import DiceLoss
 from monai.networks.nets import BasicUNet
 import torch.cuda.amp as amp
+import torchio as tio
 
 with open('config.json', 'r') as f:
     paths = json.load(f)
