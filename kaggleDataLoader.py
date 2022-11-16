@@ -158,12 +158,13 @@ class KaggleDataLoader:
             rescale,
         ])
         normalize_orientation = tio.ToCanonical()
-        downsample = tio.Resample(1), tio.Resample('t1')
-
+        downsample = tio.Resample(1)
+        resample = tio.Resample('t1')
         cropOrPad = tio.CropOrPad((130,130,200))
         preprocess_spatial = tio.Compose([
             normalize_orientation,
             downsample,
+            resample,
             cropOrPad,
         ])
         sequential = tio.SequentialLabels()
