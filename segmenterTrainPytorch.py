@@ -25,6 +25,12 @@ def cacheFunc(data, indexes):
 
 cacheFunc = memory.cache(cacheFunc)
 
+flip = tio.RandomFlip(axes=('LR'))
+aniso = tio.RandomAnisotropy()
+noise = tio.RandomNoise()
+
+augmentations = tio.compose([flip,aniso,noise])
+
 class cachingDataset(Dataset):
 
     def __init__(self, data):
@@ -34,11 +40,8 @@ class cachingDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, idx):
-        return cacheFunc(self.dataset,idx)
+        return augmentations(cacheFunc(self.dataset,idx))
 
-
-# Replicate competition metric (https://www.kaggle.com/competitions/rsna-2022-cervical-spine-fracture-detection/discussion/341854)
-loss_fn = nn.BCEWithLogitsLoss(reduction='none')
 
 root_dir="./"
 if torch.cuda.is_available():
