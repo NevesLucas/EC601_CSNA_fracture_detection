@@ -12,7 +12,7 @@ import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
 from monai.metrics import ROCAUCMetric
 from monai.losses.dice import DiceLoss
-from monai.networks.nets import UNet
+from monai.networks.nets import BasicUNetPlusPlus
 
 with open('config.json', 'r') as f:
     paths = json.load(f)
@@ -57,11 +57,9 @@ val_loader = DataLoader(
     val, batch_size=1, num_workers=8)
 
 N_EPOCHS = 500
-model = UNet(spatial_dims=3,
-             in_channels=1,
-             out_channels=1,
-             channels=(4, 8, 16, 32, 64),
-             strides=(2, 2, 2, 2)).to(device)
+model = BasicUNetPlusPlus(spatial_dims=3,
+                          in_channels=1,
+                          out_channels=1).to(device)
 
 scaler = torch.cuda.amp.GradScaler()
 optimizer = torch.optim.Adam(model.parameters(), 1e-3)
