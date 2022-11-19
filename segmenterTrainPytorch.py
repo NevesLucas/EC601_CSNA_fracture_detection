@@ -7,11 +7,14 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 from torch.optim import lr_scheduler
+from torch.utils.tensorboard import SummaryWriter
 import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
 from monai.metrics import ROCAUCMetric
 from monai.losses.dice import DiceLoss
 from monai.networks.nets import BasicUNet
+from monai.visualize import plot_2d_or_3d_image
+
 import torch.cuda.amp as amp
 import torchio as tio
 
@@ -69,7 +72,7 @@ model = BasicUNet(spatial_dims=3,
 optimizer = torch.optim.Adam(model.parameters(), 1e-5)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
 scaler = amp.GradScaler()
-loss = DiceLoss()
+loss = DiceLoss(sigmoid=True)
 val_interval = 1
 
 auc_metric = ROCAUCMetric()
@@ -81,6 +84,7 @@ val_loss_hist = []
 patience_counter = 0
 best_val_loss = np.inf
 #https://www.kaggle.com/code/samuelcortinhas/rnsa-3d-model-train-pytorch
+writer = SummaryWriter()
 #Loop over epochs
 for epoch in tqdm(range(N_EPOCHS)):
     loss_acc = 0
@@ -111,8 +115,6 @@ for epoch in tqdm(range(N_EPOCHS)):
 #        L.backward()
         # Update parameters
 #        optimizer.step()
-
-
 
         # Track loss
         loss_acc += L.detach().item()
@@ -145,6 +147,8 @@ for epoch in tqdm(range(N_EPOCHS)):
     # Save loss history
     loss_hist.append(loss_acc / train_count)
     val_loss_hist.append(val_loss_acc / valid_count)
+    plot_2d_or_3d_image(val_imgs,epoch+1,writer,index=0,tag='image')
+    plot_2d_or_3d_image(val_preds,epoch+1,writer,index=0,tag='output')
 
     # Print loss
     if (epoch + 1) % 1 == 0:
@@ -165,6 +169,7 @@ for epoch in tqdm(range(N_EPOCHS)):
             'val_loss': val_loss_acc / valid_count,
         }, "Unet3D.pt")
 
+writer.close()
 print('')
 print('Training complete!')
 # log loss
