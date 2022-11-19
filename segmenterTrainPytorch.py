@@ -11,7 +11,7 @@ import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
 from monai.metrics import ROCAUCMetric
 from monai.losses.dice import DiceLoss
-from monai.networks.nets import BasicUNet
+from monai.networks.nets import VNet
 import torch.cuda.amp as amp
 
 with open('config.json', 'r') as f:
@@ -57,7 +57,7 @@ val_loader = DataLoader(
     val, batch_size=1, num_workers=8)
 
 N_EPOCHS = 500
-model = BasicUNet(spatial_dims=3,
+model = VNet(spatial_dims=3,
                   in_channels=1,
                   out_channels=1).to(device)
 
