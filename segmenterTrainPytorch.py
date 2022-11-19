@@ -10,7 +10,7 @@ from torch.optim import lr_scheduler
 from torch.utils.tensorboard import SummaryWriter
 import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
-from monai.metrics import ROCAUCMetric
+from monai.metrics import DiceMetric
 from monai.losses.dice import DiceLoss
 from monai.networks.nets import BasicUNet
 from monai.visualize import plot_2d_or_3d_image
@@ -74,8 +74,7 @@ scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
 scaler = amp.GradScaler()
 loss = DiceLoss(sigmoid=True)
 val_interval = 1
-
-auc_metric = ROCAUCMetric()
+dice_metric = DiceMetric(include_background=True, reduction="mean", get_not_nans=False)
 
 PATIENCE = 10
 
@@ -136,17 +135,21 @@ for epoch in tqdm(range(N_EPOCHS)):
 
             # Forward pass
             val_preds = model(val_imgs)
-            val_L = loss(val_preds, val_labels)
+            dice_metric(y_pred=val_preds, y=val_labels)
             # Track loss
-            val_loss_acc += val_L.item()
             valid_count += 1
             print("finished validation batch")
-
+        metric = dice_metric.aggregate().item()
+        # reset the status for next validation round
+        dice_metric.reset()
+        val_loss_hist.append(metric)
+        writer.add_scalar("val_mean_dice", metric, epoch + 1)
     loss_acc = abs(loss_acc)
-    val_loss_acc = abs(val_loss_acc)
+
     # Save loss history
     loss_hist.append(loss_acc / train_count)
-    val_loss_hist.append(val_loss_acc / valid_count)
+
+    #tensorboard logging
     plot_2d_or_3d_image(val_imgs,epoch+1,writer,index=0,tag='image')
     plot_2d_or_3d_image(val_preds,epoch+1,writer,index=0,tag='output')
 
