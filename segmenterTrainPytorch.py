@@ -13,6 +13,7 @@ from monai.metrics import ROCAUCMetric
 from monai.losses.dice import DiceLoss
 from monai.networks.nets import VNet
 import torch.cuda.amp as amp
+import torchio as tio
 
 with open('config.json', 'r') as f:
     paths = json.load(f)
@@ -25,6 +26,12 @@ def cacheFunc(data, indexes):
 
 cacheFunc = memory.cache(cacheFunc)
 
+flip = tio.RandomFlip(axes=('LR'))
+aniso = tio.RandomAnisotropy()
+noise = tio.RandomNoise()
+
+augmentations = tio.Compose([flip,aniso,noise])
+
 class cachingDataset(Dataset):
 
     def __init__(self, data):
@@ -34,11 +41,8 @@ class cachingDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, idx):
-        return cacheFunc(self.dataset,idx)
+        return augmentations(cacheFunc(self.dataset,idx))
 
-
-# Replicate competition metric (https://www.kaggle.com/competitions/rsna-2022-cervical-spine-fracture-detection/discussion/341854)
-loss_fn = nn.BCEWithLogitsLoss(reduction='none')
 
 root_dir="./"
 if torch.cuda.is_available():
@@ -46,7 +50,7 @@ if torch.cuda.is_available():
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 dataset = kaggleDataLoader.KaggleDataLoader()
-train, val = dataset.loadDatasetAsSegmentor()
+train, val = dataset.loadDatasetAsSegmentor(trainPercentage=0.80)
 
 train = cachingDataset(train)
 val = cachingDataset(val)
@@ -61,7 +65,7 @@ model = VNet(spatial_dims=3,
                   in_channels=1,
                   out_channels=1).to(device)
 
-optimizer = torch.optim.Adam(model.parameters(), 1e-3)
+optimizer = torch.optim.Adam(model.parameters(), 1e-4)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
 scaler = amp.GradScaler()
 loss = DiceLoss()
@@ -159,11 +163,7 @@ for epoch in tqdm(range(N_EPOCHS)):
             'loss': loss_acc / train_count,
             'val_loss': val_loss_acc / valid_count,
         }, "Unet3D.pt")
-    else:
-        patience_counter += 1
 
-        if patience_counter == PATIENCE:
-            break
 print('')
 print('Training complete!')
 # log loss
