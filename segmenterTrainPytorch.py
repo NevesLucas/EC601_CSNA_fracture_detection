@@ -7,11 +7,16 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 from torch.optim import lr_scheduler
+from torch.utils.tensorboard import SummaryWriter
 import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
-from monai.metrics import ROCAUCMetric
+from monai.metrics import DiceMetric
 from monai.losses.dice import DiceLoss
 from monai.networks.nets import BasicUNet
+from monai.visualize import plot_2d_or_3d_image
+
+import torch.cuda.amp as amp
+import torchio as tio
 
 with open('config.json', 'r') as f:
     paths = json.load(f)
@@ -24,6 +29,12 @@ def cacheFunc(data, indexes):
 
 cacheFunc = memory.cache(cacheFunc)
 
+flip = tio.RandomFlip(axes=('LR'))
+aniso = tio.RandomAnisotropy()
+noise = tio.RandomNoise()
+
+augmentations = tio.Compose([flip,aniso,noise])
+
 class cachingDataset(Dataset):
 
     def __init__(self, data):
@@ -33,35 +44,16 @@ class cachingDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, idx):
-        return cacheFunc(self.dataset,idx)
+        return augmentations(cacheFunc(self.dataset,idx))
 
-
-# Replicate competition metric (https://www.kaggle.com/competitions/rsna-2022-cervical-spine-fracture-detection/discussion/341854)
-loss_fn = nn.BCEWithLogitsLoss(reduction='none')
 
 root_dir="./"
 if torch.cuda.is_available():
      print("GPU enabled")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-target_cols = ['C1', 'C2', 'C3',
-               'C4', 'C5', 'C6', 'C7',
-               'patient_overall']
-
-
-# Replicate competition metric (https://www.kaggle.com/competitions/rsna-2022-cervical-spine-fracture-detection/discussion/341854)
-loss_fn = nn.BCEWithLogitsLoss(reduction='none')
-
-competition_weights = {
-    '-' : torch.tensor([1, 1, 1, 1, 1, 1, 1, 7], dtype=torch.float, device=device),
-    '+' : torch.tensor([2, 2, 2, 2, 2, 2, 2, 14], dtype=torch.float, device=device),
-}
-
-# y_hat.shape = (batch_size, num_classes)
-# y.shape = (batch_size, num_classes)
-
 dataset = kaggleDataLoader.KaggleDataLoader()
-train, val = dataset.loadDatasetAsSegmentor()
+train, val = dataset.loadDatasetAsSegmentor(trainPercentage=0.80)
 
 train = cachingDataset(train)
 val = cachingDataset(val)
@@ -71,24 +63,27 @@ train_loader = DataLoader(
 val_loader = DataLoader(
     val, batch_size=1, num_workers=8)
 
-n_epochs = 10
-model = BasicUNet(spatial_dims=3, in_channels=1, out_channels=1).to(device)
+N_EPOCHS = 500
+model = BasicUNet(spatial_dims=3,
+                  in_channels=1,
+                  features=(32, 64, 128, 256, 512, 32),
+                  out_channels=1).to(device)
 
-optimizer = torch.optim.Adam(model.parameters(), 1e-4)
-scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
-loss = DiceLoss()
+optimizer = torch.optim.Adam(model.parameters(), 1e-5)
+scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
+scaler = amp.GradScaler()
+loss = DiceLoss(sigmoid=True)
 val_interval = 1
+dice_metric = DiceMetric(include_background=True, reduction="mean", get_not_nans=False)
 
-auc_metric = ROCAUCMetric()
-
-N_EPOCHS = 100
-PATIENCE = 3
+PATIENCE = 10
 
 loss_hist = []
 val_loss_hist = []
 patience_counter = 0
 best_val_loss = np.inf
 #https://www.kaggle.com/code/samuelcortinhas/rnsa-3d-model-train-pytorch
+writer = SummaryWriter()
 #Loop over epochs
 for epoch in tqdm(range(N_EPOCHS)):
     loss_acc = 0
@@ -98,6 +93,8 @@ for epoch in tqdm(range(N_EPOCHS)):
 
     # Loop over batches
     for batch in train_loader:
+        # Zero gradients
+        optimizer.zero_grad()
         # Send to device
         imgs = batch['ct']['data']
 
@@ -106,16 +103,17 @@ for epoch in tqdm(range(N_EPOCHS)):
         labels = labels.to(device)
 
         # Forward pass
-        preds = model(imgs)
-        L = loss(preds, labels)
+        with amp.autocast(dtype=torch.float16):
+             preds = model(imgs)
+             L = loss(preds, labels)
 
         # Backprop
-        L.backward()
+        scaler.scale(L).backward()
+        scaler.step(optimizer)
+        scaler.update()
+#        L.backward()
         # Update parameters
-        optimizer.step()
-
-        # Zero gradients
-        optimizer.zero_grad()
+#        optimizer.step()
 
         # Track loss
         loss_acc += L.detach().item()
@@ -137,15 +135,23 @@ for epoch in tqdm(range(N_EPOCHS)):
 
             # Forward pass
             val_preds = model(val_imgs)
-            val_L = loss(val_preds, val_labels)
+            dice_metric(y_pred=val_preds, y=val_labels)
             # Track loss
-            val_loss_acc += val_L.item()
             valid_count += 1
             print("finished validation batch")
+        metric = dice_metric.aggregate().item()
+        # reset the status for next validation round
+        dice_metric.reset()
+        val_loss_hist.append(metric)
+        writer.add_scalar("val_mean_dice", metric, epoch + 1)
+    loss_acc = abs(loss_acc)
 
     # Save loss history
     loss_hist.append(loss_acc / train_count)
-    val_loss_hist.append(val_loss_acc / valid_count)
+
+    #tensorboard logging
+    plot_2d_or_3d_image(val_imgs,epoch+1,writer,index=0,tag='image')
+    plot_2d_or_3d_image(val_preds,epoch+1,writer,index=0,tag='output')
 
     # Print loss
     if (epoch + 1) % 1 == 0:
@@ -165,12 +171,8 @@ for epoch in tqdm(range(N_EPOCHS)):
             'loss': loss_acc / train_count,
             'val_loss': val_loss_acc / valid_count,
         }, "Unet3D.pt")
-    else:
-        patience_counter += 1
 
-        if patience_counter == PATIENCE:
-            break
-
+writer.close()
 print('')
 print('Training complete!')
 # log loss
