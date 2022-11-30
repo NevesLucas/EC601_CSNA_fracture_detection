@@ -31,7 +31,7 @@ def boundingVolume(pred):
     for i in range(pred.shape[0]):
         temp = temp + pred[i, :, :]
     bbox = masks_to_boxes(temp)
-
+    print(bbox)
 
 
 cachedir = paths["CACHE_DIR"]
