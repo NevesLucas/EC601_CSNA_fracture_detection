@@ -52,7 +52,7 @@ model = BasicUNet(spatial_dims=3,
                   features=(32, 64, 128, 256, 512, 32),
                   out_channels=1).to(device)
 
-model.load_state_dict(torch.load(modelWeights))
+model.load_state_dict(torch.load(modelWeights)["model_state_dict"])
 model.eval()
 
 downsample = tio.Resample(1)
