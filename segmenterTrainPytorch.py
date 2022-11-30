@@ -163,14 +163,7 @@ for epoch in tqdm(range(N_EPOCHS)):
         best_val_loss = val_loss_acc / valid_count
         patience_counter = 0
         print('Valid loss improved --> saving model')
-        torch.save({
-            'epoch': epoch + 1,
-            'model_state_dict': model.state_dict(),
-            'optimiser_state_dict': optimizer.state_dict(),
-            'scheduler_state_dict': scheduler.state_dict(),
-            'loss': loss_acc / train_count,
-            'val_loss': val_loss_acc / valid_count,
-        }, "Unet3D.pt")
+        torch.save(model, "Unet3D.pt")
 
 writer.close()
 print('')
