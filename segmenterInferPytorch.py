@@ -63,7 +63,7 @@ basic_sample = train[0]
 
 downsampled = spatial_process(basic_sample)
 
-prediction = model(downsampled)  # just test on first image
+prediction = model(downsampled['ct']['data'])  # just test on first image
 native_prediction = prediction.apply_inverse_transform(image_interpolation='linear')
 
 x, y, w, h, d = boundingVolume(native_prediction)
