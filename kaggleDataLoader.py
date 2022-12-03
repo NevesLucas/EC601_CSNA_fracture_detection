@@ -178,7 +178,7 @@ class KaggleDataLoader:
             cropOrPad,
         ])
         sequential = tio.SequentialLabels()
-        remapping = {2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1, 11: 1}
+        remapping = {2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1, 11: 1, 12: 1, 13: 1}
         remap_mask = tio.RemapLabels(remapping)
 
         preprocess = tio.Compose([
