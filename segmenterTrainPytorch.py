@@ -76,7 +76,7 @@ UNet_metadata = dict(
     in_channels=1,
     out_channels=2,
     channels=(16, 32, 64, 128, 256),
-    strides=(2, 2, 2, 2),
+    strides=(4, 4, 4, 4),
     num_res_units=2,
     norm=Norm.BATCH
 )
