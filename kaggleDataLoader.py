@@ -170,12 +170,12 @@ class KaggleDataLoader:
         normalize_orientation = tio.ToCanonical()
         transform = tio.Resample('ct')
         downsample = tio.Resample(1)
-        cropOrPad = tio.CropOrPad((128,128,200))
+        pad = tio.EnsureShapeMultiple(8, method='pad')
         preprocess_spatial = tio.Compose([
             normalize_orientation,
-            downsample,
+            # downsample,
             transform,
-            cropOrPad,
+            pad,
         ])
         sequential = tio.SequentialLabels()
         remapping = {2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1, 11: 1, 12: 1, 13: 1}

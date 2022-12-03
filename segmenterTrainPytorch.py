@@ -12,9 +12,10 @@ import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
 from monai.metrics import DiceMetric
 from monai.losses.dice import DiceLoss
-from monai.networks.nets import BasicUNet
+from monai.networks.nets import UNet, BasicUNet
+from monai.networks.layers import Norm
 from monai.visualize import plot_2d_or_3d_image
-
+from monai.transforms import AsDiscrete
 import torch.cuda.amp as amp
 import torchio as tio
 
@@ -34,6 +35,7 @@ aniso = tio.RandomAnisotropy()
 noise = tio.RandomNoise()
 
 augmentations = tio.Compose([flip,aniso,noise,oneHot])
+toDiscrete = AsDiscrete(argmax=True)
 
 class cachingDataset(Dataset):
 
@@ -64,17 +66,29 @@ val_loader = DataLoader(
     val, batch_size=1, num_workers=8)
 
 N_EPOCHS = 500
-model = BasicUNet(spatial_dims=3,
-                  in_channels=1,
-                  features=(32, 64, 128, 256, 512, 32),
-                  out_channels=2).to(device)
+# model = BasicUNet(spatial_dims=3,
+#                   in_channels=1,
+#                   features=(32, 64, 128, 256, 512, 32),
+#                   strides=(2, 2, 2, 2),
+#                   out_channels=2).to(device)
+UNet_metadata = dict(
+    spatial_dims=3,
+    in_channels=1,
+    out_channels=2,
+    channels=(16, 32, 64, 128, 256),
+    strides=(2, 2, 2, 2),
+    num_res_units=2,
+    norm=Norm.BATCH
+)
+
+model = UNet(**UNet_metadata).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), 1e-5)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
 scaler = amp.GradScaler()
 loss = DiceLoss(softmax=True)
 val_interval = 1
-dice_metric = DiceMetric(include_background=False, reduction="mean", get_not_nans=False)
+dice_metric = DiceMetric(include_background=False, reduction="mean")
 PATIENCE = 10
 
 loss_hist = []
@@ -118,8 +132,6 @@ for epoch in tqdm(range(N_EPOCHS)):
 
         # Track loss
         loss_acc += L.detach().item()
-        writer.add_scalar("batch_dice", L.detach().item(), batchCount + 1)
-        batchCount += 1
         train_count += 1
         print("finished batch")
     # Update learning rate
@@ -137,16 +149,16 @@ for epoch in tqdm(range(N_EPOCHS)):
             val_labels = val_labels.to(device)
 
             # Forward pass
-            val_preds = model(val_imgs)
+            val_preds = toDiscrete(model(val_imgs))
             dice_metric(y_pred=val_preds, y=val_labels)
             # Track loss
             valid_count += 1
             print("finished validation batch")
-        val_loss_acc = dice_metric.aggregate().item()
+        metric = abs(dice_metric.aggregate().item())
         # reset the status for next validation round
         dice_metric.reset()
-        val_loss_hist.append(val_loss_acc)
-        writer.add_scalar("val_mean_dice", val_loss_acc, epoch + 1)
+        val_loss_hist.append(metric / valid_count)
+        writer.add_scalar("val_mean_dice", metric / valid_count, epoch + 1)
     loss_acc = abs(loss_acc)
 
     # Save loss history
@@ -160,14 +172,14 @@ for epoch in tqdm(range(N_EPOCHS)):
     # Print loss
     if (epoch + 1) % 1 == 0:
         print(
-            f'Epoch {epoch + 1}/{N_EPOCHS}, loss {loss_acc / train_count:.5f}, val_loss {val_loss_acc:.5f}')
+            f'Epoch {epoch + 1}/{N_EPOCHS}, loss {loss_acc / train_count:.5f}, val_loss {metric / valid_count:.5f}')
 
     # Save model (& early stopping)
-    if (val_loss_acc) < best_val_loss:
-        best_val_loss = val_loss_acc
+    if (metric / valid_count) < best_val_loss:
+        best_val_loss = metric / valid_count
         patience_counter = 0
         print('Valid loss improved --> saving model')
-        torch.save(model, "Unet3D.pt")
+        torch.save(model, "Unet3D_big.pt")
 
 writer.close()
 print('')
