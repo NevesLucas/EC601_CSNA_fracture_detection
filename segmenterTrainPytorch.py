@@ -28,12 +28,12 @@ def cacheFunc(data, indexes):
     return data[indexes]
 
 cacheFunc = memory.cache(cacheFunc)
-
+oneHot = tio.OneHot()
 flip = tio.RandomFlip(axes=('LR'))
 aniso = tio.RandomAnisotropy()
 noise = tio.RandomNoise()
 
-augmentations = tio.Compose([flip,aniso,noise])
+augmentations = tio.Compose([flip,aniso,noise,oneHot])
 
 class cachingDataset(Dataset):
 
@@ -71,10 +71,10 @@ model = BasicUNet(spatial_dims=3,
 
 optimizer = torch.optim.Adam(model.parameters(), 1e-5)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
-loss = DiceLoss(to_onehot_y=True, softmax=True)
+scaler = amp.GradScaler()
+loss = DiceLoss(sigmoid=True)
 val_interval = 1
 dice_metric = DiceMetric(include_background=False, reduction="mean", get_not_nans=False)
-
 PATIENCE = 10
 
 loss_hist = []
@@ -96,13 +96,24 @@ for epoch in tqdm(range(N_EPOCHS)):
         optimizer.zero_grad()
         # Send to device
         imgs = batch['ct']['data']
+
         labels = batch['seg']['data']
+
         imgs = imgs.to(device)
         labels = labels.to(device)
-        preds = model(imgs)
-        L = loss(preds, labels)
-        L.backward()
-        optimizer.step()
+
+        # Forward pass
+        with amp.autocast(dtype=torch.float16):
+             preds = model(imgs)
+             L = loss(preds, labels)
+
+        # Backprop
+        scaler.scale(L).backward()
+        scaler.step(optimizer)
+        scaler.update()
+#        L.backward()
+        # Update parameters
+#        optimizer.step()
 
         # Track loss
         loss_acc += L.detach().item()
