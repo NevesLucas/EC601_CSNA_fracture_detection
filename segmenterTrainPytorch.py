@@ -72,7 +72,7 @@ model = BasicUNet(spatial_dims=3,
 optimizer = torch.optim.Adam(model.parameters(), 1e-5)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
 scaler = amp.GradScaler()
-loss = DiceLoss(sigmoid=True)
+loss = DiceLoss(softmax=True)
 val_interval = 1
 dice_metric = DiceMetric(include_background=False, reduction="mean", get_not_nans=False)
 PATIENCE = 10
@@ -151,6 +151,7 @@ for epoch in tqdm(range(N_EPOCHS)):
 
     #tensorboard logging
     plot_2d_or_3d_image(val_imgs,epoch+1,writer,index=0,tag='image')
+    plot_2d_or_3d_image(val_labels,epoch+1,writer,index=0,tag='GT')
     plot_2d_or_3d_image(val_preds,epoch+1,writer,index=0,tag='output')
 
     # Print loss
