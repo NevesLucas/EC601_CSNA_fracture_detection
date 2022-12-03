@@ -63,7 +63,7 @@ train_loader = DataLoader(
 val_loader = DataLoader(
     val, batch_size=1, num_workers=8)
 
-N_EPOCHS = 100
+N_EPOCHS = 500
 model = BasicUNet(spatial_dims=3,
                   in_channels=1,
                   features=(32, 64, 128, 256, 512, 32),
@@ -81,6 +81,7 @@ loss_hist = []
 val_loss_hist = []
 patience_counter = 0
 best_val_loss = np.inf
+batchCount = 0
 #https://www.kaggle.com/code/samuelcortinhas/rnsa-3d-model-train-pytorch
 writer = SummaryWriter()
 #Loop over epochs
@@ -117,6 +118,7 @@ for epoch in tqdm(range(N_EPOCHS)):
 
         # Track loss
         loss_acc += L.detach().item()
+        writer.add_scalar("batch_dice", L.detach().item(), batchCount + 1)
         train_count += 1
         print("finished batch")
     # Update learning rate
@@ -139,11 +141,11 @@ for epoch in tqdm(range(N_EPOCHS)):
             # Track loss
             valid_count += 1
             print("finished validation batch")
-        metric = dice_metric.aggregate().item()
+        val_loss_acc = dice_metric.aggregate().item()
         # reset the status for next validation round
         dice_metric.reset()
-        val_loss_hist.append(metric)
-        writer.add_scalar("val_mean_dice", metric, epoch + 1)
+        val_loss_hist.append(val_loss_acc)
+        writer.add_scalar("val_mean_dice", val_loss_acc, epoch + 1)
     loss_acc = abs(loss_acc)
 
     # Save loss history
@@ -157,11 +159,11 @@ for epoch in tqdm(range(N_EPOCHS)):
     # Print loss
     if (epoch + 1) % 1 == 0:
         print(
-            f'Epoch {epoch + 1}/{N_EPOCHS}, loss {loss_acc / train_count:.5f}, val_loss {val_loss_acc / valid_count:.5f}')
+            f'Epoch {epoch + 1}/{N_EPOCHS}, loss {loss_acc / train_count:.5f}, val_loss {val_loss_acc:.5f}')
 
     # Save model (& early stopping)
-    if (val_loss_acc / valid_count) < best_val_loss:
-        best_val_loss = val_loss_acc / valid_count
+    if (val_loss_acc) < best_val_loss:
+        best_val_loss = val_loss_acc
         patience_counter = 0
         print('Valid loss improved --> saving model')
         torch.save(model, "Unet3D.pt")
