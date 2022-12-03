@@ -71,7 +71,6 @@ model = BasicUNet(spatial_dims=3,
 
 optimizer = torch.optim.Adam(model.parameters(), 1e-5)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
-scaler = amp.GradScaler()
 loss = DiceLoss(to_onehot_y=True, softmax=True)
 val_interval = 1
 dice_metric = DiceMetric(include_background=False, reduction="mean", get_not_nans=False)
@@ -97,24 +96,13 @@ for epoch in tqdm(range(N_EPOCHS)):
         optimizer.zero_grad()
         # Send to device
         imgs = batch['ct']['data']
-
         labels = batch['seg']['data']
-
         imgs = imgs.to(device)
         labels = labels.to(device)
-
-        # Forward pass
-        with amp.autocast(dtype=torch.float16):
-             preds = model(imgs)
-             L = loss(preds, labels)
-
-        # Backprop
-        scaler.scale(L).backward()
-        scaler.step(optimizer)
-        scaler.update()
-#        L.backward()
-        # Update parameters
-#        optimizer.step()
+        preds = model(imgs)
+        L = loss(preds, labels)
+        L.backward()
+        optimizer.step()
 
         # Track loss
         loss_acc += L.detach().item()
