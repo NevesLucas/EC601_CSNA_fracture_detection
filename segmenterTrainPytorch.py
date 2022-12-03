@@ -67,7 +67,7 @@ N_EPOCHS = 100
 model = BasicUNet(spatial_dims=3,
                   in_channels=1,
                   features=(32, 64, 128, 256, 512, 32),
-                  out_channels=2).to(device)
+                  out_channels=1).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), 1e-5)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
