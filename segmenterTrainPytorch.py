@@ -67,12 +67,12 @@ N_EPOCHS = 100
 model = BasicUNet(spatial_dims=3,
                   in_channels=1,
                   features=(32, 64, 128, 256, 512, 32),
-                  out_channels=1).to(device)
+                  out_channels=2).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), 1e-5)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
 scaler = amp.GradScaler()
-loss = DiceLoss(sigmoid=True)
+loss = DiceLoss(to_onehot_y=True, softmax=True)
 val_interval = 1
 dice_metric = DiceMetric(include_background=False, reduction="mean", get_not_nans=False)
 
@@ -99,6 +99,7 @@ for epoch in tqdm(range(N_EPOCHS)):
         imgs = batch['ct']['data']
 
         labels = batch['seg']['data']
+
         imgs = imgs.to(device)
         labels = labels.to(device)
 
