@@ -78,7 +78,7 @@ UNet_metadata = dict(
     channels=(16, 32, 64, 128, 256),
     strides=(4, 2, 2, 2),
     num_res_units=1,
-    norm=Norm.BATCH
+    norm=Norm.INSTANCE
 )
 
 model = UNet(**UNet_metadata).to(device)
