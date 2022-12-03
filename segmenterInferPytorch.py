@@ -18,7 +18,9 @@ from monai.networks.nets import BasicUNet
 from monai.visualize import plot_2d_or_3d_image
 
 from torchvision.ops import masks_to_boxes
-
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import matplotlib.animation as animation
 import torch.cuda.amp as amp
 import torchio as tio
 
@@ -27,11 +29,12 @@ with open('config.json', 'r') as f:
 
 def boundingVolume(pred):
     #acquires the 3d bounding rectangular prism of the segmentation mask
-    temp = pred[0, :, :]
-    for i in range(pred.shape[0]):
-        temp = temp + pred[i, :, :]
-    bbox = masks_to_boxes(temp)
-    print(bbox)
+    pred = (pred > 0.2).float()
+    indices = torch.nonzero(pred)
+    min_indices = indices.min(dim=0)[0]
+    max_indices = indices.max(dim=0)[0]
+    print(min_indices)
+    print(max_indices)
 
 
 cachedir = paths["CACHE_DIR"]
@@ -47,23 +50,30 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 dataset = kaggleDataLoader.KaggleDataLoader()
 train, val = dataset.loadDatasetAsClassifier(trainPercentage = 1.0)
 
-model = BasicUNet(spatial_dims=3,
-                  in_channels=1,
-                  features=(32, 64, 128, 256, 512, 32),
-                  out_channels=1).to(device)
-
-model.load_state_dict(torch.load(modelWeights)["model_state_dict"])
+model = torch.load(modelWeights, map_location=torch.device('cpu'))
 model.eval()
 
 downsample = tio.Resample(1)
 cropOrPad = tio.CropOrPad((128, 128, 200))
 
 spatial_process = tio.Compose([downsample,cropOrPad])
-basic_sample = train[0]
+basic_sample = train[10]
 
 downsampled = spatial_process(basic_sample)
 
-prediction = model(downsampled['ct']['data'])  # just test on first image
-native_prediction = prediction.apply_inverse_transform(image_interpolation='linear')
+reverseTransform = downsampled.get_inverse_transform(image_interpolation='linear')
 
-x, y, w, h, d = boundingVolume(native_prediction)
+prediction = model(downsampled.ct.data.unsqueeze(0) )  # just test on first image
+prediction = torch.argmax(prediction, dim=0)
+# native_prediction = reverseTransform(prediction[0])
+fig, ax = plt.subplots()
+ims = []
+for sagittal_slice_tensor in prediction[0][0]:
+    im = ax.imshow(sagittal_slice_tensor.detach().numpy(), cmap=plt.cm.bone, animated=True)
+    ims.append([im])
+
+ani = animation.ArtistAnimation(fig, ims, interval=50, blit=True,
+                                repeat_delay=1000)
+plt.show()
+
+boundingVolume(prediction[0][0])

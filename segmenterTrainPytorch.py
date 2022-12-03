@@ -58,16 +58,16 @@ train, val = dataset.loadDatasetAsSegmentor(trainPercentage=0.80)
 train = cachingDataset(train)
 val = cachingDataset(val)
 train_loader = DataLoader(
-    train, batch_size=1, shuffle=True, prefetch_factor=4, persistent_workers=True, drop_last=True, num_workers=16)
+    train, batch_size=1, shuffle=True, prefetch_factor=4, persistent_workers=True, drop_last=True, num_workers=8)
 
 val_loader = DataLoader(
     val, batch_size=1, num_workers=8)
 
-N_EPOCHS = 500
+N_EPOCHS = 100
 model = BasicUNet(spatial_dims=3,
                   in_channels=1,
                   features=(32, 64, 128, 256, 512, 32),
-                  out_channels=1).to(device)
+                  out_channels=2).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), 1e-5)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
