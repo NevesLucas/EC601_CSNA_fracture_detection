@@ -157,8 +157,8 @@ for epoch in tqdm(range(N_EPOCHS)):
         metric = abs(dice_metric.aggregate().item())
         # reset the status for next validation round
         dice_metric.reset()
-        val_loss_hist.append(metric / valid_count)
-        writer.add_scalar("val_mean_dice", metric / valid_count, epoch + 1)
+        val_loss_hist.append(metric)
+        writer.add_scalar("val_mean_dice", metric, epoch + 1)
     loss_acc = abs(loss_acc)
 
     # Save loss history
@@ -172,11 +172,11 @@ for epoch in tqdm(range(N_EPOCHS)):
     # Print loss
     if (epoch + 1) % 1 == 0:
         print(
-            f'Epoch {epoch + 1}/{N_EPOCHS}, loss {loss_acc / train_count:.5f}, val_loss {metric / valid_count:.5f}')
+            f'Epoch {epoch + 1}/{N_EPOCHS}, loss {loss_acc / train_count:.5f}, val_loss {metric:.5f}')
 
     # Save model (& early stopping)
-    if (metric / valid_count) < best_val_loss:
-        best_val_loss = metric / valid_count
+    if (metric) < best_val_loss:
+        best_val_loss = metric
         patience_counter = 0
         print('Valid loss improved --> saving model')
         torch.save(model, "Unet3D_big.pt")
