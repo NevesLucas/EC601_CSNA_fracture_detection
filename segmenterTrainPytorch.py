@@ -119,6 +119,7 @@ for epoch in tqdm(range(N_EPOCHS)):
         # Track loss
         loss_acc += L.detach().item()
         writer.add_scalar("batch_dice", L.detach().item(), batchCount + 1)
+        batchCount += 1
         train_count += 1
         print("finished batch")
     # Update learning rate
