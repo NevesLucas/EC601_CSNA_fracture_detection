@@ -23,7 +23,7 @@ segWeights = paths["seg_weights"]
 cachedir = paths["CACHE_DIR"]
 memory = Memory(cachedir, verbose=0, compress=True)
 
-segModel = torch.load(segWeights, map_location="cpu") # need 2 gpus for this workflow
+segModel = torch.load(segWeights, map_location="cuda:1") # need 2 gpus for this workflow
 segModel.eval()
 segResize = tio.Resize((128, 128, 200)) #resize for segmentation
 classResize = tio.Resize((256,256,256))
