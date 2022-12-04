@@ -149,7 +149,7 @@ for epoch in tqdm(range(N_EPOCHS)):
             val_labels = val_labels.to(device)
 
             # Forward pass
-            val_preds = toDiscrete(model(val_imgs))
+            val_preds = model(val_imgs)
             dice_metric(y_pred=val_preds, y=val_labels)
             # Track loss
             valid_count += 1
@@ -179,7 +179,7 @@ for epoch in tqdm(range(N_EPOCHS)):
         best_val_loss = metric
         patience_counter = 0
         print('Valid loss improved --> saving model')
-        torch.save(model, "Unet3D_big.pt")
+    torch.save(model, str("Unet3D_big"+epoch+".pt"))
 
 writer.close()
 print('')
