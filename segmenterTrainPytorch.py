@@ -29,6 +29,7 @@ def cacheFunc(data, indexes):
     return data[indexes]
 
 cacheFunc = memory.cache(cacheFunc)
+resize = tio.Resize((128, 128, 200))
 oneHot = tio.OneHot()
 flip = tio.RandomFlip(axes=('LR'))
 aniso = tio.RandomAnisotropy()
@@ -66,22 +67,11 @@ val_loader = DataLoader(
     val, batch_size=1, num_workers=16)
 
 N_EPOCHS = 300
-# model = BasicUNet(spatial_dims=3,
-#                   in_channels=1,
-#                   features=(32, 64, 128, 256, 512, 32),
-#                   strides=(2, 2, 2, 2),
-#                   out_channels=2).to(device)
-UNet_metadata = dict(
-    spatial_dims=3,
-    in_channels=1,
-    out_channels=2,
-    channels=(16, 32, 64, 128, 256),
-    strides=(4, 2, 2, 2),
-    num_res_units=1,
-    norm=Norm.INSTANCE
-)
-
-model = UNet(**UNet_metadata).to(device)
+model = BasicUNet(spatial_dims=3,
+                  in_channels=1,
+                  features=(32, 64, 128, 256, 512, 32),
+                  strides=(2, 2, 2, 2),
+                  out_channels=2).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), 1e-5)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
@@ -179,7 +169,7 @@ for epoch in tqdm(range(N_EPOCHS)):
         best_val_loss = metric
         patience_counter = 0
         print('Valid loss improved --> saving model')
-    torch.save(model, str("Unet3D_big"+str(epoch)+".pt"))
+    torch.save(model, str("Unet3D_resized_128x128x200"+str(epoch)+".pt"))
 
 writer.close()
 print('')
