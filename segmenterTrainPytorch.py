@@ -70,7 +70,6 @@ N_EPOCHS = 300
 model = BasicUNet(spatial_dims=3,
                   in_channels=1,
                   features=(32, 64, 128, 256, 512, 32),
-                  strides=(2, 2, 2, 2),
                   out_channels=2).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), 1e-5)
