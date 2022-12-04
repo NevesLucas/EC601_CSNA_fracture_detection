@@ -35,7 +35,7 @@ flip = tio.RandomFlip(axes=('LR'))
 aniso = tio.RandomAnisotropy()
 noise = tio.RandomNoise()
 
-augmentations = tio.Compose([flip,aniso,noise,oneHot])
+augmentations = tio.Compose([resize,flip,aniso,noise,oneHot])
 toDiscrete = AsDiscrete(argmax=True, to_onehot=2)
 
 class cachingDataset(Dataset):
