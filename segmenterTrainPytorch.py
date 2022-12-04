@@ -179,7 +179,7 @@ for epoch in tqdm(range(N_EPOCHS)):
         best_val_loss = metric
         patience_counter = 0
         print('Valid loss improved --> saving model')
-    torch.save(model, str("Unet3D_big"+epoch+".pt"))
+    torch.save(model, str("Unet3D_big"+str(epoch)+".pt"))
 
 writer.close()
 print('')
