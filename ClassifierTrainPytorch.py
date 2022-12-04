@@ -7,21 +7,62 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 from torch.optim import lr_scheduler
+from torch.utils.tensorboard import SummaryWriter
 import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
-from monai.metrics import ROCAUCMetric
+from monai.metrics import ROCAUCMetric, ConfusionMatrixMetric
+from monai.visualize import class_activation_maps
 from monai.networks.nets import DenseNet121
+import torch.cuda.amp as amp
+import torchio as tio
 
 with open('config.json', 'r') as f:
     paths = json.load(f)
 
+segWeights = paths["seg_weights"]
 cachedir = paths["CACHE_DIR"]
 memory = Memory(cachedir, verbose=0, compress=True)
 
+segModel = torch.load(segWeights, map_location="cpu") # need 2 gpus for this workflow
+segModel.eval()
+segResize = tio.Resize((128, 128, 200)) #resize for segmentation
+classResize = tio.Resize((256,256,256))
+
+def boundingVolume(pred,original_dims):
+    #acquires the 3d bounding rectangular prism of the segmentation mask
+    indices = torch.nonzero(pred)
+    min_indices, min_val = indices.min(dim=0)
+    max_indices, max_val = indices.max(dim=0)
+    print(min_indices)
+    print(max_indices)
+    return (min_indices[1].item(), original_dims[0]-max_indices[1].item(),
+            min_indices[2].item(), original_dims[1]-max_indices[2].item(),
+            min_indices[3].item(), original_dims[2]-max_indices[3].item())
+
+def cropData(dataElement):
+    downsampled = segResize(dataElement)
+    originalSize = dataElement[0].size()
+    rescale = tio.Resize(originalSize)
+    mask = segModel(downsampled.unsqueeze(0))
+    mask = torch.argmax(mask, dim=1)
+    mask = rescale(mask)
+    bounding_prism = boundingVolume(mask,originalSize)
+    crop = tio.Crop(bounding_prism)
+    cropped = crop(dataElement)
+    return classResize(cropped)
+
+smartCrop = tio.Lambda(cropData,types_to_apply=[tio.INTENSITY])
+
 def cacheFunc(data, indexes):
+
     return data[indexes]
 
 cacheFunc = memory.cache(cacheFunc)
+
+flip = tio.RandomFlip(axes=('LR'))
+aniso = tio.RandomAnisotropy()
+noise = tio.RandomNoise()
+augmentations = tio.Compose([flip, aniso, noise])
 
 class cachingDataset(Dataset):
 
@@ -32,7 +73,7 @@ class cachingDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, idx):
-        return cacheFunc(self.dataset,idx)
+        return augmentations(cacheFunc(self.dataset,idx))
 
 
 # Replicate competition metric (https://www.kaggle.com/competitions/rsna-2022-cervical-spine-fracture-detection/discussion/341854)
@@ -41,12 +82,11 @@ loss_fn = nn.BCEWithLogitsLoss(reduction='none')
 root_dir="./"
 if torch.cuda.is_available():
      print("GPU enabled")
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 target_cols = ['C1', 'C2', 'C3',
                'C4', 'C5', 'C6', 'C7',
                'patient_overall']
-
 
 # Replicate competition metric (https://www.kaggle.com/competitions/rsna-2022-cervical-spine-fracture-detection/discussion/341854)
 loss_fn = nn.BCEWithLogitsLoss(reduction='none')
@@ -69,36 +109,36 @@ def competiton_loss_row_norm(y_hat, y):
     return loss.mean()
 
 dataset = kaggleDataLoader.KaggleDataLoader()
-train, val = dataset.loadDatasetAsSegmentor()
-
-
-# TODO: use Segmentation ground truth data to crop train and val volumes into Regions of interest
-
-#train = CroppedROITrainSet
-#val = CroppedROIValSet
+train, val = dataset.loadDatasetAsSegmentor(train_aug=smartCrop)
 
 train = cachingDataset(train)
 val = cachingDataset(val)
+# train_loader = DataLoader(
+#     train, batch_size=4, shuffle=True, prefetch_factor=4, persistent_workers=True, drop_last=True, num_workers=16)
+# val_loader = DataLoader(
+#     val, batch_size=1, num_workers=16)
+
 train_loader = DataLoader(
-    train, batch_size=4, shuffle=True, prefetch_factor=4, persistent_workers=True, drop_last=True, num_workers=16)
-
+    train, batch_size=1, shuffle=True, num_workers=0)
 val_loader = DataLoader(
-    val, batch_size=1, num_workers=8)
+    val, batch_size=1, num_workers=0)
 
-n_epochs = 10
+N_EPOCHS = 100
 model = DenseNet121(spatial_dims=3, in_channels=1, out_channels=8).to(device)
+
 optimizer = torch.optim.Adam(model.parameters(), 1e-5)
-scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
+scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
+scaler = amp.GradScaler()
+
 val_interval = 1
 auc_metric = ROCAUCMetric()
-
-N_EPOCHS = 20
-PATIENCE = 3
+confusion = ConfusionMatrixMetric()
 
 loss_hist = []
 val_loss_hist = []
 patience_counter = 0
 best_val_loss = np.inf
+writer = SummaryWriter()
 #https://www.kaggle.com/code/samuelcortinhas/rnsa-3d-model-train-pytorch
 #Loop over epochs
 for epoch in tqdm(range(N_EPOCHS)):
@@ -116,19 +156,26 @@ for epoch in tqdm(range(N_EPOCHS)):
         imgs = imgs.to(device)
         labels = labels.to(device)
 
+        optimizer.zero_grad()
         # Forward pass
-        preds = model(imgs)
-        L = competiton_loss_row_norm(preds, labels)
+        with amp.autocast(dtype=torch.float16):
+            preds = model(imgs)
+            L = competiton_loss_row_norm(preds, labels)
 
         # Backprop
-        L.backward()
-        # Update parameters
-        optimizer.step()
+        scaler.scale(L).backward()
+        scaler.step(optimizer)
+        scaler.update()
 
-        # Zero gradients
-        optimizer.zero_grad()
+        # # Backprop
+        # L.backward()
+        # # Update parameters
+        # optimizer.step()
+        # #
+        # # Zero gradients
+        # optimizer.zero_grad()
 
-        # Track loss
+        #Track loss
         loss_acc += L.detach().item()
         train_count += 1
         print("finished batch")
@@ -149,14 +196,24 @@ for epoch in tqdm(range(N_EPOCHS)):
             # Forward pass
             val_preds = model(val_imgs)
             val_L = competiton_loss_row_norm(val_preds, val_labels)
+            auc_metric(y_pred=val_preds,y=val_labels)
+            confusion(y_pred=val_preds,y=val_labels)
             # Track loss
             val_loss_acc += val_L.item()
             valid_count += 1
             print("finished validation batch")
 
-    # Save loss history
-    loss_hist.append(loss_acc / train_count)
-    val_loss_hist.append(val_loss_acc / valid_count)
+        # Save loss history
+        metric = auc_metric.aggregate().item()
+        confusion_matrix = confusion.aggregate().item()
+        confusion.reset()
+        auc_metric.reset()
+        loss_hist.append(loss_acc / train_count)
+        val_loss_hist.append(val_loss_acc / valid_count)
+        writer.add_image("confusion_matrix",confusion_matrix,epoch + 1 )
+        writer.add_scalar("val_mean_auc", metric, epoch + 1)
+        writer.add_scalar("train_loss", loss_acc / train_count,epoch + 1)
+        writer.add_scalar("train_loss", val_loss_acc / valid_count, epoch + 1)
 
     # Print loss
     if (epoch + 1) % 1 == 0:
@@ -164,24 +221,9 @@ for epoch in tqdm(range(N_EPOCHS)):
             f'Epoch {epoch + 1}/{N_EPOCHS}, loss {loss_acc / train_count:.5f}, val_loss {val_loss_acc / valid_count:.5f}')
 
     # Save model (& early stopping)
-    if (val_loss_acc / valid_count) < best_val_loss:
-        best_val_loss = val_loss_acc / valid_count
-        patience_counter = 0
-        print('Valid loss improved --> saving model')
-        torch.save({
-            'epoch': epoch + 1,
-            'model_state_dict': model.state_dict(),
-            'optimiser_state_dict': optimizer.state_dict(),
-            'scheduler_state_dict': scheduler.state_dict(),
-            'loss': loss_acc / train_count,
-            'val_loss': val_loss_acc / valid_count,
-        }, "Conv3DNet.pt")
-    else:
-        patience_counter += 1
+    torch.save(model, str("classifier_DenseNet121_"+str(epoch)+".pt"))
 
-        if patience_counter == PATIENCE:
-            break
-
+writer.close()
 print('')
 print('Training complete!')
 # log loss

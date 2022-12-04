@@ -5,7 +5,7 @@ import kaggleDataLoader
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.animation as animation
-
+import torchio as tio
 dataLoader = kaggleDataLoader.KaggleDataLoader()
 
 train, val = dataLoader.loadDatasetAsSegmentor()
@@ -13,9 +13,13 @@ train, val = dataLoader.loadDatasetAsSegmentor()
 print(len(train))
 
 subject1 = train[0]
+oneHot = tio.OneHot()
+subject1 = oneHot(subject1)
+labels = subject1.seg.data
+maxval = labels.max()
+
 
 subject1.plot()
-
 fig, ax = plt.subplots()
 ims = []
 for sagittal_slice_tensor in subject1.seg.data[0]:

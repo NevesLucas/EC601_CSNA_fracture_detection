@@ -190,14 +190,11 @@ class KaggleDataLoader:
         num_train = int(trainPercentage*num_subjects)
         num_val = num_subjects - num_train
         train_set, val_set = torch.utils.data.random_split(trainSet,[num_train,num_val])
-        train_set.dataset.set_transform(preprocess)
-        val_set.dataset.set_transform(preprocess)
         if train_aug is not None:
-            val_set = copy.deepcopy(val_set)
-            augment = tio.Compose([
+            preprocess = tio.Compose([
                 preprocess,
                 train_aug
             ])
-            train_set.dataset.set_transform(augment)
-            val_set.dataset.set_transform(preprocess)
+        train_set.dataset.set_transform(preprocess)
+        val_set.dataset.set_transform(preprocess)
         return train_set, val_set
