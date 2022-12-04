@@ -41,6 +41,7 @@ def cropData(dataElement):
     downsampled = segResize(dataElement)
     originalSize = dataElement[0].size()
     rescale = tio.Resize(originalSize)
+    downsampled.to("cuda:1")
     mask = segModel(downsampled.unsqueeze(0))
     mask = torch.argmax(mask, dim=1)
     mask = rescale(mask)
