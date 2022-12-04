@@ -12,10 +12,12 @@ import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
 from monai.metrics import DiceMetric
 from monai.losses.dice import DiceLoss
+
 from monai.networks.nets import UNet, BasicUNet
 from monai.networks.layers import Norm
 from monai.visualize import plot_2d_or_3d_image
 from monai.transforms import AsDiscrete
+
 import torch.cuda.amp as amp
 import torchio as tio
 
@@ -30,6 +32,7 @@ def cacheFunc(data, indexes):
 
 cacheFunc = memory.cache(cacheFunc)
 
+
 oneHot = tio.OneHot()
 flip = tio.RandomFlip(axes=('LR'))
 aniso = tio.RandomAnisotropy()
@@ -37,6 +40,7 @@ noise = tio.RandomNoise()
 
 augmentations = tio.Compose([flip,aniso,noise,oneHot])
 toDiscrete = AsDiscrete(argmax=True, to_onehot=2)
+
 
 class cachingDataset(Dataset):
 
@@ -64,6 +68,7 @@ train_loader = DataLoader(
     train, batch_size=1, shuffle=True, prefetch_factor=4, persistent_workers=True, drop_last=True, num_workers=16)
 
 val_loader = DataLoader(
+
     val, batch_size=1, num_workers=16)
 
 N_EPOCHS = 300
@@ -78,6 +83,7 @@ scaler = amp.GradScaler()
 loss = DiceLoss(softmax=True)
 val_interval = 1
 dice_metric = DiceMetric(include_background=False, reduction="mean")
+
 PATIENCE = 10
 
 loss_hist = []
