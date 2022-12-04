@@ -139,8 +139,8 @@ for epoch in tqdm(range(N_EPOCHS)):
 
             # Forward pass
             val_preds = model(val_imgs)
-            va_preds = toDiscrete(val_preds[0])
-            dice_metric(y_pred=val_preds, y=val_labels[0])
+            val_preds = toDiscrete(val_preds)
+            dice_metric(y_pred=val_preds, y=val_labels)
             # Track loss
             valid_count += 1
             print("finished validation batch")

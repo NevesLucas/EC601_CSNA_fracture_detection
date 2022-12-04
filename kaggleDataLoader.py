@@ -116,9 +116,6 @@ class KaggleDataLoader:
             rescale,
         ])
         normalize_orientation = tio.ToCanonical()
-        downsample = tio.Resample(1)
-
-        cropOrPad = tio.CropOrPad((130,130,200))
 
         preprocess_spatial = tio.Compose([
             normalize_orientation])

@@ -16,6 +16,7 @@ from monai.metrics import DiceMetric
 from monai.losses.dice import DiceLoss
 from monai.networks.nets import BasicUNet
 from monai.visualize import plot_2d_or_3d_image
+from monai.transforms import AsDiscrete
 
 from torchvision.ops import masks_to_boxes
 import matplotlib.pyplot as plt
@@ -27,14 +28,16 @@ import torchio as tio
 with open('config.json', 'r') as f:
     paths = json.load(f)
 
-def boundingVolume(pred):
+def boundingVolume(pred,original_dims):
     #acquires the 3d bounding rectangular prism of the segmentation mask
-    pred = (pred > 0.2).float()
     indices = torch.nonzero(pred)
-    min_indices = indices.min(dim=0)[0]
-    max_indices = indices.max(dim=0)[0]
+    min_indices, min_val = indices.min(dim=0)
+    max_indices, max_val = indices.max(dim=0)
     print(min_indices)
     print(max_indices)
+    return (min_indices[1].item(), original_dims[0]-max_indices[1].item(),
+            min_indices[2].item(), original_dims[1]-max_indices[2].item(),
+            min_indices[3].item(), original_dims[2]-max_indices[3].item())
 
 
 cachedir = paths["CACHE_DIR"]
@@ -50,25 +53,25 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 dataset = kaggleDataLoader.KaggleDataLoader()
 train, val = dataset.loadDatasetAsClassifier(trainPercentage = 1.0)
 
-model = torch.load(modelWeights, map_location=torch.device('cpu'))
+model = torch.load(modelWeights, map_location=device)
 model.eval()
 
-downsample = tio.Resample(1)
-cropOrPad = tio.CropOrPad((128, 128, 200))
+resize = tio.Resize((128, 128, 200)) #resize for segmentation
 
-spatial_process = tio.Compose([downsample,cropOrPad])
 basic_sample = train[10]
+# get original dims first
+original_dims = basic_sample.spatial_shape
+downsampled = resize(basic_sample)
 
-downsampled = spatial_process(basic_sample)
+reverseTransform = tio.Resize(original_dims)
 
-reverseTransform = downsampled.get_inverse_transform(image_interpolation='linear')
+prediction = model(downsampled.ct.data.unsqueeze(0) ) #get mask for current subject
 
-prediction = model(downsampled.ct.data.unsqueeze(0) )  # just test on first image
-prediction = torch.argmax(prediction, dim=0)
-# native_prediction = reverseTransform(prediction[0])
+binary_mask = torch.argmax(prediction, dim=1) # binarize
+
 fig, ax = plt.subplots()
 ims = []
-for sagittal_slice_tensor in prediction[0][0]:
+for sagittal_slice_tensor in binary_mask[0]:
     im = ax.imshow(sagittal_slice_tensor.detach().numpy(), cmap=plt.cm.bone, animated=True)
     ims.append([im])
 
@@ -76,4 +79,19 @@ ani = animation.ArtistAnimation(fig, ims, interval=50, blit=True,
                                 repeat_delay=1000)
 plt.show()
 
-boundingVolume(prediction[0][0])
+binary_mask = reverseTransform(binary_mask) # convert mask back to original image resolution
+bounding_prism = boundingVolume(binary_mask,original_dims) # find the bounding area of the segmentation
+
+crop = tio.Crop(bounding_prism)
+cropped_original = crop(basic_sample) # crop the original data to fit the segmentation.
+
+
+fig, ax = plt.subplots()
+ims = []
+for sagittal_slice_tensor in cropped_original.ct.data[0]:
+    im = ax.imshow(sagittal_slice_tensor.detach().numpy(), animated=True)
+    ims.append([im])
+
+ani = animation.ArtistAnimation(fig, ims, interval=50, blit=True,
+                                repeat_delay=1000)
+plt.show()
