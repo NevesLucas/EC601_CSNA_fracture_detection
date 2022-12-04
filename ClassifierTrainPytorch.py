@@ -40,7 +40,6 @@ def cropData(dataElement):
     downsampled = segResize(dataElement)
     originalSize = dataElement[0].size()
     rescale = tio.Resize(originalSize)
-    downsampled
     mask = segModel(downsampled.unsqueeze(0))
     mask = torch.argmax(mask, dim=1)
     mask = rescale(mask)
@@ -113,10 +112,10 @@ train, val = dataset.loadDatasetAsSegmentor(train_aug=smartCrop)
 train = cachingDataset(train)
 val = cachingDataset(val)
 train_loader = DataLoader(
-    train, batch_size=4, shuffle=True, prefetch_factor=8, persistent_workers=True, drop_last=True, num_workers=8)
+    train, batch_size=1, shuffle=True, prefetch_factor=8, persistent_workers=True, drop_last=True, num_workers=61)
 val_loader = DataLoader(
-    val, batch_size=1, num_workers=8)
-
+    val, batch_size=1, num_workers=16)
+#
 # train_loader = DataLoader(
 #     train, batch_size=1, shuffle=True, num_workers=0)
 # val_loader = DataLoader(
@@ -181,9 +180,6 @@ for epoch in tqdm(range(N_EPOCHS)):
     # Don't update weights
     with torch.no_grad():
         # Validate
-        y_true = []
-        y_pred = []
-
         for batch in val_loader:
             # Reshape
             val_imgs = batch['ct']['data']
@@ -195,9 +191,6 @@ for epoch in tqdm(range(N_EPOCHS)):
             # Forward pass
             val_preds = model(val_imgs)
             val_L = competiton_loss_row_norm(val_preds, val_labels)
-            for i in range(len(val_preds)):
-                y_true.append(val_labels[i].item())
-                y_pred.append(val_preds[i].item())
             # Track loss
             val_loss_acc += val_L.item()
             valid_count += 1
@@ -209,8 +202,7 @@ for epoch in tqdm(range(N_EPOCHS)):
 
         writer.add_scalar("train_loss", loss_acc / train_count,epoch + 1)
         writer.add_scalar("val_loss", val_loss_acc / valid_count, epoch + 1)
-        print(classification_report(
-            y_true, y_pred, target_names=target_cols, digits=4))
+
     # Print loss
     if (epoch + 1) % 1 == 0:
         print(
