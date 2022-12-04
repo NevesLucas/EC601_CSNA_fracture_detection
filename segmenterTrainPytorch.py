@@ -36,7 +36,7 @@ aniso = tio.RandomAnisotropy()
 noise = tio.RandomNoise()
 
 augmentations = tio.Compose([flip,aniso,noise,oneHot])
-toDiscrete = AsDiscrete(argmax=True)
+toDiscrete = AsDiscrete(argmax=True, to_onehot=2)
 
 class cachingDataset(Dataset):
 
@@ -140,11 +140,12 @@ for epoch in tqdm(range(N_EPOCHS)):
 
             # Forward pass
             val_preds = model(val_imgs)
-            dice_metric(y_pred=val_preds, y=val_labels)
+            va_preds = toDiscrete(val_preds[0])
+            dice_metric(y_pred=val_preds, y=val_labels[0])
             # Track loss
             valid_count += 1
             print("finished validation batch")
-        metric = abs(dice_metric.aggregate().item())
+        metric = dice_metric.aggregate().item()
         # reset the status for next validation round
         dice_metric.reset()
         val_loss_hist.append(metric)
