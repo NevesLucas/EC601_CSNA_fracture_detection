@@ -24,18 +24,18 @@ with open('config.json', 'r') as f:
 
 cachedir = paths["CACHE_DIR"]
 memory = Memory(cachedir, verbose=0, compress=True)
-
+resize = tio.Resize((128, 128, 200))
 def cacheFunc(data, indexes):
-    return data[indexes]
+    return resize(data[indexes])
 
 cacheFunc = memory.cache(cacheFunc)
-resize = tio.Resize((128, 128, 200))
+
 oneHot = tio.OneHot()
 flip = tio.RandomFlip(axes=('LR'))
 aniso = tio.RandomAnisotropy()
 noise = tio.RandomNoise()
 
-augmentations = tio.Compose([resize,flip,aniso,noise,oneHot])
+augmentations = tio.Compose([flip,aniso,noise,oneHot])
 toDiscrete = AsDiscrete(argmax=True, to_onehot=2)
 
 class cachingDataset(Dataset):
