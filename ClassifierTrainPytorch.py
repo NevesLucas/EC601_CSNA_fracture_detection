@@ -10,9 +10,8 @@ from torch.optim import lr_scheduler
 from torch.utils.tensorboard import SummaryWriter
 import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
-from monai.metrics import ROCAUCMetric, ConfusionMatrixMetric
-from monai.visualize import class_activation_maps
 from monai.networks.nets import DenseNet121
+from classification_report import Report, Config, HyperParameters
 import torch.cuda.amp as amp
 import torchio as tio
 
@@ -118,7 +117,6 @@ train_loader = DataLoader(
 val_loader = DataLoader(
     val, batch_size=1, num_workers=8)
 
-
 # train_loader = DataLoader(
 #     train, batch_size=1, shuffle=True, num_workers=0)
 # val_loader = DataLoader(
@@ -131,15 +129,16 @@ optimizer = torch.optim.Adam(model.parameters(), 1e-5)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
 scaler = amp.GradScaler()
 
-val_interval = 1
-auc_metric = ROCAUCMetric()
-confusion = ConfusionMatrixMetric()
+tboardReport = Report(classes=target_cols)
+data, label = next(iter(train_loader))
+tboardReport.plot_model(model, data.to(device))
 
+val_interval = 1
 loss_hist = []
 val_loss_hist = []
 patience_counter = 0
 best_val_loss = np.inf
-writer = SummaryWriter()
+
 #https://www.kaggle.com/code/samuelcortinhas/rnsa-3d-model-train-pytorch
 #Loop over epochs
 for epoch in tqdm(range(N_EPOCHS)):
@@ -175,6 +174,18 @@ for epoch in tqdm(range(N_EPOCHS)):
         # #
         # # Zero gradients
         # optimizer.zero_grad()
+        # converting raw _logits to softmax output
+        preds = nn.functional.softmax(preds, dim=-1)
+
+        # write training batch information into report
+        tboardReport.write_a_batch(loss=L.detach().item(),
+                             batch_size=imgs.size(0),
+                             actual=labels,
+                             prediction=preds,
+                             train=True)
+
+        # plot histogram of model weight, bias and gradients 2 times in an epoch
+        tboardReport.plot_model_data_grad(at_which_iter = int(len(train_loader) / 2))
 
         #Track loss
         loss_acc += L.detach().item()
@@ -197,25 +208,25 @@ for epoch in tqdm(range(N_EPOCHS)):
             # Forward pass
             val_preds = model(val_imgs)
             val_L = competiton_loss_row_norm(val_preds, val_labels)
-            auc_metric(y_pred=val_preds,y=val_labels)
-            confusion(y_pred=val_preds,y=val_labels)
+
             # Track loss
+            # converting raw _logits to softmax output
+            preds = nn.functional.softmax(val_preds, dim=-1)
+
+            # write validation batch information into report
+            tboardReport.write_a_batch(loss=val_L,
+                                 batch_size=val_imgs.size(0),
+                                 actual=val_labels,
+                                 prediction=preds,
+                                 train=False)
             val_loss_acc += val_L.item()
             valid_count += 1
             print("finished validation batch")
 
         # Save loss history
-        metric = auc_metric.aggregate().item()
-        confusion_matrix = confusion.aggregate().item()
-        confusion.reset()
-        auc_metric.reset()
         loss_hist.append(loss_acc / train_count)
         val_loss_hist.append(val_loss_acc / valid_count)
-        writer.add_image("confusion_matrix",confusion_matrix,epoch + 1 )
-        writer.add_scalar("val_mean_auc", metric, epoch + 1)
-        writer.add_scalar("train_loss", loss_acc / train_count,epoch + 1)
-        writer.add_scalar("train_loss", val_loss_acc / valid_count, epoch + 1)
-
+        tboardReport.plot_an_epoch()
     # Print loss
     if (epoch + 1) % 1 == 0:
         print(
@@ -224,7 +235,7 @@ for epoch in tqdm(range(N_EPOCHS)):
     # Save model (& early stopping)
     torch.save(model, str("classifier_DenseNet121_"+str(epoch)+".pt"))
 
-writer.close()
+report.close()
 print('')
 print('Training complete!')
 # log loss
@@ -233,7 +244,7 @@ df = pd.DataFrame(data=data)
 df.to_csv("results.csv", sep='\t')
 
 # Plot loss
-plt.figure(figsize=(10,5))
+plt.figure(figsize=(10, 5))
 plt.plot(loss_hist, c='C0', label='loss')
 plt.plot(val_loss_hist, c='C1', label='val_loss')
 plt.title('Competition metric')

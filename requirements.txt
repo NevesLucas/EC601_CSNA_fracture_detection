@@ -13,3 +13,5 @@ torchio
 pydicom
 joblib
 pandas
+seaborn
+classification-report
