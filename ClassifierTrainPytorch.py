@@ -23,7 +23,7 @@ segWeights = paths["seg_weights"]
 cachedir = paths["CACHE_DIR"]
 memory = Memory(cachedir, verbose=0, compress=True)
 
-segModel = torch.load(segWeights, map_location="cuda:1") # need 2 gpus for this workflow
+segModel = torch.load(segWeights, map_location="cpu") # need 2 gpus for this workflow
 segModel.eval()
 segResize = tio.Resize((128, 128, 200)) #resize for segmentation
 classResize = tio.Resize((256,256,256))
@@ -41,7 +41,7 @@ def cropData(dataElement):
     downsampled = segResize(dataElement)
     originalSize = dataElement[0].size()
     rescale = tio.Resize(originalSize)
-    downsampled.to("cuda:1")
+    downsampled
     mask = segModel(downsampled.unsqueeze(0))
     mask = torch.argmax(mask, dim=1)
     mask = rescale(mask)
