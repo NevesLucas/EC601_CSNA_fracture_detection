@@ -63,9 +63,9 @@ train_loader = DataLoader(
     train, batch_size=1, shuffle=True, prefetch_factor=4, persistent_workers=True, drop_last=True, num_workers=16)
 
 val_loader = DataLoader(
-    val, batch_size=1, num_workers=8)
+    val, batch_size=1, num_workers=16)
 
-N_EPOCHS = 500
+N_EPOCHS = 300
 # model = BasicUNet(spatial_dims=3,
 #                   in_channels=1,
 #                   features=(32, 64, 128, 256, 512, 32),
