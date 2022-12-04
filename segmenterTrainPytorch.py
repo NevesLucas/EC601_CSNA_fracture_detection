@@ -12,8 +12,11 @@ import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
 from monai.metrics import DiceMetric
 from monai.losses.dice import DiceLoss
-from monai.networks.nets import BasicUNet
+
+from monai.networks.nets import UNet, BasicUNet
+from monai.networks.layers import Norm
 from monai.visualize import plot_2d_or_3d_image
+from monai.transforms import AsDiscrete
 
 import torch.cuda.amp as amp
 import torchio as tio
@@ -23,17 +26,21 @@ with open('config.json', 'r') as f:
 
 cachedir = paths["CACHE_DIR"]
 memory = Memory(cachedir, verbose=0, compress=True)
-
+resize = tio.Resize((128, 128, 200))
 def cacheFunc(data, indexes):
-    return data[indexes]
+    return resize(data[indexes])
 
 cacheFunc = memory.cache(cacheFunc)
 
+
+oneHot = tio.OneHot()
 flip = tio.RandomFlip(axes=('LR'))
 aniso = tio.RandomAnisotropy()
 noise = tio.RandomNoise()
 
-augmentations = tio.Compose([flip,aniso,noise])
+augmentations = tio.Compose([flip,aniso,noise,oneHot])
+toDiscrete = AsDiscrete(argmax=True, to_onehot=2)
+
 
 class cachingDataset(Dataset):
 
@@ -61,20 +68,21 @@ train_loader = DataLoader(
     train, batch_size=1, shuffle=True, prefetch_factor=4, persistent_workers=True, drop_last=True, num_workers=16)
 
 val_loader = DataLoader(
-    val, batch_size=1, num_workers=8)
 
-N_EPOCHS = 500
+    val, batch_size=1, num_workers=16)
+
+N_EPOCHS = 300
 model = BasicUNet(spatial_dims=3,
                   in_channels=1,
                   features=(32, 64, 128, 256, 512, 32),
-                  out_channels=1).to(device)
+                  out_channels=2).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), 1e-5)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
 scaler = amp.GradScaler()
-loss = DiceLoss(sigmoid=True)
+loss = DiceLoss(softmax=True)
 val_interval = 1
-dice_metric = DiceMetric(include_background=True, reduction="mean", get_not_nans=False)
+dice_metric = DiceMetric(include_background=False, reduction="mean")
 
 PATIENCE = 10
 
@@ -82,6 +90,7 @@ loss_hist = []
 val_loss_hist = []
 patience_counter = 0
 best_val_loss = np.inf
+batchCount = 0
 #https://www.kaggle.com/code/samuelcortinhas/rnsa-3d-model-train-pytorch
 writer = SummaryWriter()
 #Loop over epochs
@@ -99,6 +108,7 @@ for epoch in tqdm(range(N_EPOCHS)):
         imgs = batch['ct']['data']
 
         labels = batch['seg']['data']
+
         imgs = imgs.to(device)
         labels = labels.to(device)
 
@@ -135,6 +145,7 @@ for epoch in tqdm(range(N_EPOCHS)):
 
             # Forward pass
             val_preds = model(val_imgs)
+            val_preds = toDiscrete(val_preds)
             dice_metric(y_pred=val_preds, y=val_labels)
             # Track loss
             valid_count += 1
@@ -151,26 +162,20 @@ for epoch in tqdm(range(N_EPOCHS)):
 
     #tensorboard logging
     plot_2d_or_3d_image(val_imgs,epoch+1,writer,index=0,tag='image')
+    plot_2d_or_3d_image(val_labels,epoch+1,writer,index=0,tag='GT')
     plot_2d_or_3d_image(val_preds,epoch+1,writer,index=0,tag='output')
 
     # Print loss
     if (epoch + 1) % 1 == 0:
         print(
-            f'Epoch {epoch + 1}/{N_EPOCHS}, loss {loss_acc / train_count:.5f}, val_loss {val_loss_acc / valid_count:.5f}')
+            f'Epoch {epoch + 1}/{N_EPOCHS}, loss {loss_acc / train_count:.5f}, val_loss {metric:.5f}')
 
     # Save model (& early stopping)
-    if (val_loss_acc / valid_count) < best_val_loss:
-        best_val_loss = val_loss_acc / valid_count
+    if (metric) < best_val_loss:
+        best_val_loss = metric
         patience_counter = 0
         print('Valid loss improved --> saving model')
-        torch.save({
-            'epoch': epoch + 1,
-            'model_state_dict': model.state_dict(),
-            'optimiser_state_dict': optimizer.state_dict(),
-            'scheduler_state_dict': scheduler.state_dict(),
-            'loss': loss_acc / train_count,
-            'val_loss': val_loss_acc / valid_count,
-        }, "Unet3D.pt")
+    torch.save(model, str("Unet3D_resized_128x128x200"+str(epoch)+".pt"))
 
 writer.close()
 print('')
