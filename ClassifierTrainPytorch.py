@@ -11,7 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
 from monai.networks.nets import DenseNet121
-from classification_report import Report, Config, HyperParameters
+from sklearn.metrics import classification_report
 import torch.cuda.amp as amp
 import torchio as tio
 
@@ -129,16 +129,12 @@ optimizer = torch.optim.Adam(model.parameters(), 1e-5)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
 scaler = amp.GradScaler()
 
-tboardReport = Report(classes=target_cols)
-data, label = next(iter(train_loader))
-tboardReport.plot_model(model, data.to(device))
-
 val_interval = 1
 loss_hist = []
 val_loss_hist = []
 patience_counter = 0
 best_val_loss = np.inf
-
+writer = SummaryWriter()
 #https://www.kaggle.com/code/samuelcortinhas/rnsa-3d-model-train-pytorch
 #Loop over epochs
 for epoch in tqdm(range(N_EPOCHS)):
@@ -174,18 +170,6 @@ for epoch in tqdm(range(N_EPOCHS)):
         # #
         # # Zero gradients
         # optimizer.zero_grad()
-        # converting raw _logits to softmax output
-        preds = nn.functional.softmax(preds, dim=-1)
-
-        # write training batch information into report
-        tboardReport.write_a_batch(loss=L.detach().item(),
-                             batch_size=imgs.size(0),
-                             actual=labels,
-                             prediction=preds,
-                             train=True)
-
-        # plot histogram of model weight, bias and gradients 2 times in an epoch
-        tboardReport.plot_model_data_grad(at_which_iter = int(len(train_loader) / 2))
 
         #Track loss
         loss_acc += L.detach().item()
@@ -197,6 +181,9 @@ for epoch in tqdm(range(N_EPOCHS)):
     # Don't update weights
     with torch.no_grad():
         # Validate
+        y_true = []
+        y_pred = []
+
         for batch in val_loader:
             # Reshape
             val_imgs = batch['ct']['data']
@@ -208,17 +195,10 @@ for epoch in tqdm(range(N_EPOCHS)):
             # Forward pass
             val_preds = model(val_imgs)
             val_L = competiton_loss_row_norm(val_preds, val_labels)
-
+            for i in range(len(val_preds)):
+                y_true.append(val_labels[i].item())
+                y_pred.append(val_preds[i].item())
             # Track loss
-            # converting raw _logits to softmax output
-            preds = nn.functional.softmax(val_preds, dim=-1)
-
-            # write validation batch information into report
-            tboardReport.write_a_batch(loss=val_L,
-                                 batch_size=val_imgs.size(0),
-                                 actual=val_labels,
-                                 prediction=preds,
-                                 train=False)
             val_loss_acc += val_L.item()
             valid_count += 1
             print("finished validation batch")
@@ -226,7 +206,11 @@ for epoch in tqdm(range(N_EPOCHS)):
         # Save loss history
         loss_hist.append(loss_acc / train_count)
         val_loss_hist.append(val_loss_acc / valid_count)
-        tboardReport.plot_an_epoch()
+
+        writer.add_scalar("train_loss", loss_acc / train_count,epoch + 1)
+        writer.add_scalar("val_loss", val_loss_acc / valid_count, epoch + 1)
+        print(classification_report(
+            y_true, y_pred, target_names=target_cols, digits=4))
     # Print loss
     if (epoch + 1) % 1 == 0:
         print(
@@ -235,7 +219,7 @@ for epoch in tqdm(range(N_EPOCHS)):
     # Save model (& early stopping)
     torch.save(model, str("classifier_DenseNet121_"+str(epoch)+".pt"))
 
-report.close()
+writer.close()
 print('')
 print('Training complete!')
 # log loss
