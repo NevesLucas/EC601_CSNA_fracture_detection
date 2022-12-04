@@ -112,7 +112,7 @@ train, val = dataset.loadDatasetAsSegmentor(train_aug=smartCrop)
 train = cachingDataset(train)
 val = cachingDataset(val)
 train_loader = DataLoader(
-    train, batch_size=1, shuffle=True, prefetch_factor=8, persistent_workers=True, drop_last=True, num_workers=61)
+    train, batch_size=1, shuffle=True, prefetch_factor=8, persistent_workers=True, drop_last=True, num_workers=16)
 val_loader = DataLoader(
     val, batch_size=1, num_workers=16)
 #
