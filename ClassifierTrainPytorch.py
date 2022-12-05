@@ -10,7 +10,7 @@ from torch.optim import lr_scheduler
 from torch.utils.tensorboard import SummaryWriter
 import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
-from monai.networks.nets import DenseNet121
+from monai.networks.nets import DenseNet201
 from sklearn.metrics import classification_report
 import torch.cuda.amp as amp
 import torchio as tio
@@ -83,14 +83,12 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 target_cols = ['C1', 'C2', 'C3',
                'C4', 'C5', 'C6', 'C7',
-               'patient_overall']
+               'patient_overall', 'none']
 
 # Replicate competition metric (https://www.kaggle.com/competitions/rsna-2022-cervical-spine-fracture-detection/discussion/341854)
-loss_fn = nn.BCEWithLogitsLoss(reduction='none')
-
 competition_weights = {
-    '-' : torch.tensor([1, 1, 1, 1, 1, 1, 1, 7], dtype=torch.float, device=device),
-    '+' : torch.tensor([2, 2, 2, 2, 2, 2, 2, 14], dtype=torch.float, device=device),
+    '-' : torch.tensor([1, 1, 1, 1, 1, 1, 1, 7, 1], dtype=torch.float, device=device),
+    '+' : torch.tensor([2, 2, 2, 2, 2, 2, 2, 14, 1], dtype=torch.float, device=device),
 }
 
 # y_hat.shape = (batch_size, num_classes)
@@ -98,7 +96,7 @@ competition_weights = {
 
 # with row-wise weights normalization (https://www.kaggle.com/competitions/rsna-2022-cervical-spine-fracture-detection/discussion/344565)
 def competiton_loss_row_norm(y_hat, y):
-    loss = loss_fn(y_hat, y.to(y_hat.dtype))
+    loss = loss_fn(y_hat, y)
     weights = y * competition_weights['+'] + (1 - y) * competition_weights['-']
     loss = (loss * weights).sum(axis=1)
     w_sum = weights.sum(axis=1)
@@ -111,18 +109,18 @@ train, val = dataset.loadDatasetAsSegmentor(train_aug=smartCrop)
 
 train = cachingDataset(train)
 val = cachingDataset(val)
-train_loader = DataLoader(
-    train, batch_size=1, shuffle=True, prefetch_factor=8, persistent_workers=True, drop_last=True, num_workers=16)
-val_loader = DataLoader(
-    val, batch_size=1, num_workers=16)
-#
 # train_loader = DataLoader(
-#     train, batch_size=1, shuffle=True, num_workers=0)
+#     train, batch_size=1, shuffle=True, prefetch_factor=8, persistent_workers=True, drop_last=True, num_workers=16)
 # val_loader = DataLoader(
-#     val, batch_size=1, num_workers=0)
+#     val, batch_size=1, num_workers=16)
+#
+train_loader = DataLoader(
+    train, batch_size=1, shuffle=True, num_workers=0)
+val_loader = DataLoader(
+    val, batch_size=1, num_workers=0)
 
 N_EPOCHS = 200
-model = DenseNet121(spatial_dims=3, in_channels=1, out_channels=8).to(device)
+model = DenseNet201(spatial_dims=3, in_channels=1, out_channels=9).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), 1e-5)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
@@ -180,6 +178,8 @@ for epoch in tqdm(range(N_EPOCHS)):
     # Don't update weights
     with torch.no_grad():
         # Validate
+        actual = []
+        pred = []
         for batch in val_loader:
             # Reshape
             val_imgs = batch['ct']['data']
@@ -191,15 +191,27 @@ for epoch in tqdm(range(N_EPOCHS)):
             # Forward pass
             val_preds = model(val_imgs)
             val_L = competiton_loss_row_norm(val_preds, val_labels)
+            pred.append(torch.argmax(val_preds, dim=1).item())
+            actual.append(torch.argmax(val_labels, dim=1).item())
             # Track loss
             val_loss_acc += val_L.item()
             valid_count += 1
             print("finished validation batch")
 
+        output_valid = classification_report(actual, pred, output_dict=True, target_names=target_cols)
+        print(output_valid)
         # Save loss history
         loss_hist.append(loss_acc / train_count)
         val_loss_hist.append(val_loss_acc / valid_count)
-
+        for key in output_valid:
+            if isinstance(output_valid[key], dict):
+                for key1 in output_valid[key]:
+                    if key1 != "support":
+                        scaler_tag = {"valid": output_valid[key][key1]}
+                        writer.add_scalars(f"{key}/{key1}", scaler_tag, epoch + 1)
+            else:
+                scaler_tag = {"valid": output_valid[key]}
+                writer.add_scalars(key, scaler_tag, epoch + 1)
         writer.add_scalar("train_loss", loss_acc / train_count,epoch + 1)
         writer.add_scalar("val_loss", val_loss_acc / valid_count, epoch + 1)
 
@@ -209,7 +221,7 @@ for epoch in tqdm(range(N_EPOCHS)):
             f'Epoch {epoch + 1}/{N_EPOCHS}, loss {loss_acc / train_count:.5f}, val_loss {val_loss_acc / valid_count:.5f}')
 
     # Save model (& early stopping)
-    torch.save(model, str("classifier_DenseNet121_"+str(epoch)+".pt"))
+    torch.save(model, str("classifier_DenseNet201_" + str(epoch)+".pt"))
 
 writer.close()
 print('')
