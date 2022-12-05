@@ -56,10 +56,12 @@ def cacheFunc(data, indexes):
 
 cacheFunc = memory.cache(cacheFunc)
 
-flip = tio.RandomFlip(axes=('LR'))
-aniso = tio.RandomAnisotropy()
-noise = tio.RandomNoise()
-augmentations = tio.Compose([flip, aniso, noise])
+flip = tio.RandomFlip()
+affine = tio.RandomAffine()
+gamma = tio.RandomGamma(0.5)
+aniso = tio.RandomAnisotropy(p=0.25)
+noise = tio.RandomNoise(p=0.25)
+augmentations = tio.Compose([flip,affine, aniso, noise, gamma])
 
 class cachingDataset(Dataset):
 
@@ -83,12 +85,12 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 target_cols = ['C1', 'C2', 'C3',
                'C4', 'C5', 'C6', 'C7',
-               'patient_overall', 'none']
+               'patient_overall']
 
 # Replicate competition metric (https://www.kaggle.com/competitions/rsna-2022-cervical-spine-fracture-detection/discussion/341854)
 competition_weights = {
-    '-' : torch.tensor([1, 1, 1, 1, 1, 1, 1, 7, 1], dtype=torch.float, device=device),
-    '+' : torch.tensor([2, 2, 2, 2, 2, 2, 2, 14, 1], dtype=torch.float, device=device),
+    '-' : torch.tensor([1, 1, 1, 1, 1, 1, 1, 7], dtype=torch.float, device=device),
+    '+' : torch.tensor([2, 2, 2, 2, 2, 2, 2, 14], dtype=torch.float, device=device),
 }
 
 # y_hat.shape = (batch_size, num_classes)
@@ -109,18 +111,18 @@ train, val = dataset.loadDatasetAsSegmentor(train_aug=smartCrop)
 
 train = cachingDataset(train)
 val = cachingDataset(val)
-# train_loader = DataLoader(
-#     train, batch_size=1, shuffle=True, prefetch_factor=8, persistent_workers=True, drop_last=True, num_workers=16)
-# val_loader = DataLoader(
-#     val, batch_size=1, num_workers=16)
-#
 train_loader = DataLoader(
-    train, batch_size=1, shuffle=True, num_workers=0)
+    train, batch_size=1, shuffle=True, prefetch_factor=8, persistent_workers=True, drop_last=True, num_workers=20)
 val_loader = DataLoader(
-    val, batch_size=1, num_workers=0)
+    val, batch_size=1, num_workers=20)
+
+# train_loader = DataLoader(
+#     train, batch_size=1, shuffle=True, num_workers=0)
+# val_loader = DataLoader(
+#     val, batch_size=1, num_workers=0)
 
 N_EPOCHS = 200
-model = DenseNet201(spatial_dims=3, in_channels=1, out_channels=9).to(device)
+model = DenseNet201(spatial_dims=3, in_channels=1, out_channels=8).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), 1e-5)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
@@ -191,27 +193,15 @@ for epoch in tqdm(range(N_EPOCHS)):
             # Forward pass
             val_preds = model(val_imgs)
             val_L = competiton_loss_row_norm(val_preds, val_labels)
-            pred.append(torch.argmax(val_preds, dim=1).item())
-            actual.append(torch.argmax(val_labels, dim=1).item())
             # Track loss
             val_loss_acc += val_L.item()
             valid_count += 1
             print("finished validation batch")
 
-        output_valid = classification_report(actual, pred, output_dict=True, target_names=target_cols)
-        print(output_valid)
         # Save loss history
         loss_hist.append(loss_acc / train_count)
         val_loss_hist.append(val_loss_acc / valid_count)
-        for key in output_valid:
-            if isinstance(output_valid[key], dict):
-                for key1 in output_valid[key]:
-                    if key1 != "support":
-                        scaler_tag = {"valid": output_valid[key][key1]}
-                        writer.add_scalars(f"{key}/{key1}", scaler_tag, epoch + 1)
-            else:
-                scaler_tag = {"valid": output_valid[key]}
-                writer.add_scalars(key, scaler_tag, epoch + 1)
+
         writer.add_scalar("train_loss", loss_acc / train_count,epoch + 1)
         writer.add_scalar("val_loss", val_loss_acc / valid_count, epoch + 1)
 
