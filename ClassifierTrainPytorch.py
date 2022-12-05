@@ -22,7 +22,7 @@ segWeights = paths["seg_weights"]
 cachedir = paths["CACHE_DIR"]
 memory = Memory(cachedir, verbose=1, compress=True)
 
-segModel = torch.load(segWeights, map_location="cpu") # need 2 gpus for this workflow
+segModel = torch.load(segWeights, map_location="cpu")
 segModel.eval()
 segResize = tio.Resize((128, 128, 200)) #resize for segmentation
 classResize = tio.Resize((256,256,256))
@@ -152,7 +152,7 @@ for epoch in tqdm(range(N_EPOCHS)):
         imgs = imgs.to(device)
         labels = labels.to(device)
 
-        optimizer.zero_grad()
+
         # Forward pass
         with amp.autocast(dtype=torch.float16):
             preds = model(imgs)
@@ -169,7 +169,7 @@ for epoch in tqdm(range(N_EPOCHS)):
         # optimizer.step()
         # #
         # # Zero gradients
-        # optimizer.zero_grad()
+        optimizer.zero_grad()
 
         #Track loss
         loss_acc += L.detach().item()
@@ -190,8 +190,10 @@ for epoch in tqdm(range(N_EPOCHS)):
             val_labels = val_labels.to(device)
 
             # Forward pass
-            val_preds = model(val_imgs)
-            val_L = competiton_loss_row_norm(val_preds, val_labels)
+            with amp.autocast(dtype=torch.float16):
+                val_preds = model(val_imgs)
+                val_L = competiton_loss_row_norm(val_preds, val_labels)
+
             # Track loss
             val_loss_acc += val_L.item()
             valid_count += 1
