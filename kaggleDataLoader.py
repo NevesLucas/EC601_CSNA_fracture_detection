@@ -10,7 +10,7 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 from tqdm import tqdm
 
 import torchio as tio
-
+from rsna_cropped import RSNACervicalSpineFracture
 import torch
 with open('config.json', 'r') as f:
     paths = json.load(f)
@@ -108,42 +108,19 @@ class KaggleDataLoader:
         """
         prepare full dataset for training
         """
-        HOUNSFIELD_AIR, HOUNSFIELD_BONE = -1000, 1900
-        clamp = tio.Clamp(out_min=HOUNSFIELD_AIR, out_max=HOUNSFIELD_BONE)
-        rescale = tio.RescaleIntensity(percentiles=(0.5, 99.5))
-        preprocess_intensity = tio.Compose([
-            clamp,
-            rescale,
-        ])
-        normalize_orientation = tio.ToCanonical()
 
-        preprocess_spatial = tio.Compose([
-            normalize_orientation])
-
-        preprocess = tio.Compose([
-            preprocess_spatial,
-            preprocess_intensity,
-        ])
-
-        trainSet = tio.datasets.RSNACervicalSpineFracture(RSNA_2022_PATH, add_segmentations=False)
-        #strip out bad entries
-        trainSet = tio.data.SubjectsDataset(list(filter( lambda subject : subject.StudyInstanceUID not in revert_dict, trainSet.dry_iter())))
+        trainSet = RSNACervicalSpineFracture(RSNA_2022_PATH, add_segmentations=False)
         num_subjects = len(trainSet)
         num_train = int(trainPercentage*num_subjects)
         num_val = num_subjects - num_train
         train_set, val_set = torch.utils.data.random_split(trainSet,[num_train,num_val])
-        val_set = copy.deepcopy(val_set)
-        train_set.dataset.set_transform(preprocess)
-        val_set.dataset.set_transform(preprocess)
         if train_aug is not None:
             val_set = copy.deepcopy(val_set)
             augment = tio.Compose([
-                preprocess,
                 train_aug
             ])
             train_set.dataset.set_transform(augment)
-            val_set.dataset.set_transform(preprocess)
-
+            val_set.dataset.set_transform(augment)
         return train_set, val_set
 
 

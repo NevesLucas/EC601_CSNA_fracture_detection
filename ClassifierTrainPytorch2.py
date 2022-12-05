@@ -22,34 +22,6 @@ segWeights = paths["seg_weights"]
 cachedir = paths["CACHE_DIR"]
 memory = Memory(cachedir, verbose=0, compress=True)
 
-segModel = torch.load(segWeights, map_location="cpu")
-segModel.eval()
-segResize = tio.Resize((128, 128, 200)) #resize for segmentation
-classResize = tio.Resize((256,256,256))
-
-def boundingVolume(pred,original_dims):
-    #acquires the 3d bounding rectangular prism of the segmentation mask
-    indices = torch.nonzero(pred)
-    min_indices, min_val = indices.min(dim=0)
-    max_indices, max_val = indices.max(dim=0)
-    return (min_indices[1].item(), original_dims[0]-max_indices[1].item(),
-            min_indices[2].item(), original_dims[1]-max_indices[2].item(),
-            min_indices[3].item(), original_dims[2]-max_indices[3].item())
-
-def cropData(dataElement):
-    downsampled = segResize(dataElement)
-    originalSize = dataElement[0].size()
-    rescale = tio.Resize(originalSize)
-    mask = segModel(downsampled.unsqueeze(0))
-    mask = torch.argmax(mask, dim=1)
-    mask = rescale(mask)
-    bounding_prism = boundingVolume(mask,originalSize)
-    crop = tio.Crop(bounding_prism)
-    cropped = crop(dataElement)
-    return classResize(cropped)
-
-smartCrop = tio.Lambda(cropData,types_to_apply=[tio.INTENSITY])
-
 def cacheFunc(data, indexes):
 
     return data[indexes]
@@ -82,7 +54,7 @@ loss_fn = nn.BCEWithLogitsLoss(reduction='none')
 root_dir="./"
 if torch.cuda.is_available():
      print("GPU enabled")
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 target_cols = ['C1', 'C2', 'C3',
                'C4', 'C5', 'C6', 'C7',
@@ -108,7 +80,7 @@ def competiton_loss_row_norm(y_hat, y):
 
 dataset = kaggleDataLoader.KaggleDataLoader()
 
-train, val = dataset.loadDatasetAsClassifier(train_aug=smartCrop)
+train, val = dataset.loadDatasetAsClassifier()
 
 train = cachingDataset(train)
 val = cachingDataset(val)
@@ -134,7 +106,7 @@ loss_hist = []
 val_loss_hist = []
 patience_counter = 0
 best_val_loss = np.inf
-writer = SummaryWriter(log_dir="densenet121")
+writer = SummaryWriter()
 #https://www.kaggle.com/code/samuelcortinhas/rnsa-3d-model-train-pytorch
 #Loop over epochs
 for epoch in tqdm(range(N_EPOCHS)):
@@ -151,7 +123,6 @@ for epoch in tqdm(range(N_EPOCHS)):
         labels = torch.FloatTensor([[batch[target_col][line] for target_col in target_cols] for line in range(0,len(batch['C1']))])
         imgs = imgs.to(device)
         labels = labels.to(device)
-
 
         # Forward pass
         with amp.autocast(dtype=torch.float16):
