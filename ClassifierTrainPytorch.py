@@ -20,7 +20,7 @@ with open('config.json', 'r') as f:
 
 segWeights = paths["seg_weights"]
 cachedir = paths["CACHE_DIR"]
-memory = Memory(cachedir, verbose=0, compress=True)
+memory = Memory(cachedir, verbose=1, compress=True)
 
 segModel = torch.load(segWeights, map_location="cpu") # need 2 gpus for this workflow
 segModel.eval()
@@ -61,7 +61,7 @@ affine = tio.RandomAffine()
 gamma = tio.RandomGamma(0.5)
 aniso = tio.RandomAnisotropy(p=0.25)
 noise = tio.RandomNoise(p=0.25)
-augmentations = tio.Compose([flip,affine, aniso, noise, gamma])
+augmentations = tio.Compose([flip, affine, aniso, noise, gamma])
 
 class cachingDataset(Dataset):
 
@@ -72,7 +72,8 @@ class cachingDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, idx):
-        return augmentations(cacheFunc(self.dataset,idx))
+        batch = cacheFunc(self.dataset, idx)
+        return augmentations(batch)
 
 
 # Replicate competition metric (https://www.kaggle.com/competitions/rsna-2022-cervical-spine-fracture-detection/discussion/341854)
