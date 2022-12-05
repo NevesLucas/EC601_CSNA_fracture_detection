@@ -173,15 +173,13 @@ for epoch in tqdm(range(N_EPOCHS)):
         #Track loss
         loss_acc += L.detach().item()
         train_count += 1
-        print("finished batch")
+        print("finished batch " + str(train_count))
     # Update learning rate
     scheduler.step()
 
     # Don't update weights
     with torch.no_grad():
         # Validate
-        actual = []
-        pred = []
         for batch in val_loader:
             # Reshape
             val_imgs = batch['ct']['data']
