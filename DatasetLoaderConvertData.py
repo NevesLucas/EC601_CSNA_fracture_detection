@@ -1,37 +1,26 @@
+#unit test the dataset loader to make sure its working properly
+import os
 import kaggleDataLoader
 import json
-
-from joblib import Memory
-from matplotlib import pyplot as plt
-import numpy as np
-from tqdm import tqdm
-
 import torch
-import torch.nn as nn
-from torch.optim import lr_scheduler
-from torch.utils.tensorboard import SummaryWriter
-import pandas as pd
-from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
-from monai.metrics import DiceMetric
-from monai.losses.dice import DiceLoss
-from monai.networks.nets import BasicUNet
-from monai.visualize import plot_2d_or_3d_image
-from monai.transforms import AsDiscrete
-
-from torchvision.ops import masks_to_boxes
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.animation as animation
-import torch.cuda.amp as amp
 import torchio as tio
+from tqdm import tqdm
 
 with open('config.json', 'r') as f:
     paths = json.load(f)
 
+RSNA_2022_PATH    = paths["RSNA_2022_PATH"]
+TRAIN_IMAGES_PREPROCESSED = f'{RSNA_2022_PATH}/train_images_cropped/'
 cachedir = paths["CACHE_DIR"]
 modelWeights = paths["seg_weights"]
 
-segModel = torch.load(modelWeights, map_location="cpu") # need 2 gpus for this workflow
+if not os.path.exists(TRAIN_IMAGES_PREPROCESSED):
+        os.makedirs(TRAIN_IMAGES_PREPROCESSED)
+
+segModel = torch.load(modelWeights, map_location="cpu")
 segModel.eval()
 segResize = tio.Resize((128, 128, 200)) #resize for segmentation
 classResize = tio.Resize((256,256,256))
@@ -61,25 +50,18 @@ def cropData(dataElement):
 
 smartCrop = tio.Lambda(cropData)
 
-root_dir="./"
 
-if torch.cuda.is_available():
-     print("GPU enabled")
+dataLoader = kaggleDataLoader.KaggleDataLoader()
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-dataset = kaggleDataLoader.KaggleDataLoader()
-train, val = dataset.loadDatasetAsClassifier(trainPercentage = 1.0, train_aug=smartCrop)
-
-basic_sample = train[10]
-# get original dims first
-
-fig, ax = plt.subplots()
-ims = []
-for sagittal_slice_tensor in basic_sample.ct.data[0]:
-    im = ax.imshow(sagittal_slice_tensor.detach().numpy(), animated=True)
-    ims.append([im])
-
-ani = animation.ArtistAnimation(fig, ims, interval=50, blit=True,
-                                repeat_delay=1000)
-plt.show()
+train, val = dataLoader.loadDatasetAsClassifier(trainPercentage=1.0, train_aug=smartCrop)
+train = train.dataset
+#Iterate through all the input and preprocess it
+i = 0
+for subj in tqdm(train):
+    i += 1
+    if(i == 10): #REMOVE !!
+        break # REMOVE !!
+    file_to_save = TRAIN_IMAGES_PREPROCESSED+subj.StudyInstanceUID+".nii"
+    print(subj.StudyInstanceUID)
+    if (not os.path.exists(file_to_save)):
+        subj.ct.save(file_to_save)
