@@ -20,7 +20,7 @@ with open('config.json', 'r') as f:
 
 segWeights = paths["seg_weights"]
 cachedir = paths["CACHE_DIR"]
-memory = Memory(cachedir, verbose=1, compress=True)
+memory = Memory(cachedir, verbose=0, compress=True)
 
 segModel = torch.load(segWeights, map_location="cpu")
 segModel.eval()
