@@ -8,6 +8,7 @@ import matplotlib.patches as patches
 import matplotlib.animation as animation
 import torchio as tio
 from tqdm import tqdm
+from joblib import Parallel, delayed
 
 with open('config.json', 'r') as f:
     paths = json.load(f)
@@ -50,18 +51,34 @@ def cropData(dataElement):
 
 smartCrop = tio.Lambda(cropData)
 
+HOUNSFIELD_AIR, HOUNSFIELD_BONE = -1000, 1900
+clamp = tio.Clamp(out_min=HOUNSFIELD_AIR, out_max=HOUNSFIELD_BONE)
+rescale = tio.RescaleIntensity(percentiles=(0.5, 99.5))
+preprocess_intensity = tio.Compose([
+    clamp,
+    rescale,
+])
+normalize_orientation = tio.ToCanonical()
+
+preprocess_spatial = tio.Compose([
+    normalize_orientation])
+
+preprocess = tio.Compose([
+    preprocess_spatial,
+    preprocess_intensity,
+    smartCrop
+])
 
 dataLoader = kaggleDataLoader.KaggleDataLoader()
 
-train, val = dataLoader.loadDatasetAsClassifier(trainPercentage=1.0, train_aug=smartCrop)
-train = train.dataset
+trainSet = tio.datasets.RSNACervicalSpineFracture(RSNA_2022_PATH, add_segmentations=False)
+
 #Iterate through all the input and preprocess it
-i = 0
-for subj in tqdm(train):
-    i += 1
-    if(i == 10): #REMOVE !!
-        break # REMOVE !!
+
+def process(subj):
     file_to_save = TRAIN_IMAGES_PREPROCESSED+subj.StudyInstanceUID+".nii"
     print(subj.StudyInstanceUID)
     if (not os.path.exists(file_to_save)):
-        subj.ct.save(file_to_save)
+        processed = preprocess(subj)
+        processed.ct.save(file_to_save)
+results = Parallel(n_jobs=24)(delayed(process)(subj) for subj in trainSet.dry_iter())
