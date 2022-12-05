@@ -125,7 +125,7 @@ class KaggleDataLoader:
             preprocess_intensity,
         ])
 
-        trainSet = tio.datasets.RSNACervicalSpineFracture(RSNA_2022_PATH)
+        trainSet = tio.datasets.RSNACervicalSpineFracture(RSNA_2022_PATH,add_segmentations=False)
         #strip out bad entries
         trainSet = tio.data.SubjectsDataset(list(filter( lambda subject : subject.StudyInstanceUID not in revert_dict, trainSet.dry_iter())))
         num_subjects = len(trainSet)

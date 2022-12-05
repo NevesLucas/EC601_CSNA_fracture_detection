@@ -107,7 +107,7 @@ def competiton_loss_row_norm(y_hat, y):
 
 dataset = kaggleDataLoader.KaggleDataLoader()
 
-train, val = dataset.loadDatasetAsSegmentor(train_aug=smartCrop)
+train, val = dataset.loadDatasetAsClassifier(train_aug=smartCrop)
 
 train = cachingDataset(train)
 val = cachingDataset(val)
