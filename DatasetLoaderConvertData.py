@@ -31,8 +31,6 @@ def boundingVolume(pred,original_dims):
     indices = torch.nonzero(pred)
     min_indices, min_val = indices.min(dim=0)
     max_indices, max_val = indices.max(dim=0)
-    print(min_indices)
-    print(max_indices)
     return (min_indices[1].item(), original_dims[0]-max_indices[1].item(),
             min_indices[2].item(), original_dims[1]-max_indices[2].item(),
             min_indices[3].item(), original_dims[2]-max_indices[3].item())
@@ -77,8 +75,7 @@ trainSet = tio.datasets.RSNACervicalSpineFracture(RSNA_2022_PATH, add_segmentati
 
 def process(subj):
     file_to_save = TRAIN_IMAGES_PREPROCESSED+subj.StudyInstanceUID+".nii"
-    print(subj.StudyInstanceUID)
     if (not os.path.exists(file_to_save)):
         processed = preprocess(subj)
         processed.ct.save(file_to_save)
-results = Parallel(n_jobs=24)(delayed(process)(subj) for subj in trainSet.dry_iter())
+results = Parallel(n_jobs=20, verbose=10)(delayed(process)(subj) for subj in trainSet.dry_iter())

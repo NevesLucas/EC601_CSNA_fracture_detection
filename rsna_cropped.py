@@ -6,16 +6,15 @@ from typing import Optional
 from typing import Union
 from types import ModuleType
 
-from .. import LabelMap
-from .. import ScalarImage
-from .. import Subject
-from .. import SubjectsDataset
-from ..typing import TypePath
-from ..utils import normalize_path
+from torchio import LabelMap
+from torchio import ScalarImage
+from torchio import Subject
+from torchio import SubjectsDataset
+from torchio.typing import TypePath
+from torchio.utils import normalize_path
 
 
 TypeBoxes = List[Dict[str, Union[str, float, int]]]
-
 
 class RSNACervicalSpineFracture(SubjectsDataset):
     """RSNA 2022 Cervical Spine Fracture Detection dataset.
