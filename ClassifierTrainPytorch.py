@@ -94,7 +94,7 @@ val_loader = DataLoader(
 # val_loader = DataLoader(
 #     val, batch_size=1, num_workers=0)
 
-N_EPOCHS = 200
+N_EPOCHS = 500
 model = DenseNet201(spatial_dims=3, in_channels=1, out_channels=8).to(device)
 model = nn.DataParallel(model)
 model.to(device)
