@@ -9,13 +9,14 @@ from sklearn.metrics import classification_report
 with open('config.json', 'r') as f:
     paths = json.load(f)
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 RSNA_2022_PATH    = paths["RSNA_2022_PATH"]
 cachedir = paths["CACHE_DIR"]
 segWeights = paths["seg_weights"]
 classWeights = paths["classifier_weights"]
 segModel = torch.load(segWeights, map_location="cpu") # need 2 gpus for this workflow
 segModel.eval()
-classModel = torch.load(classWeights, map_location="cpu") # need 2 gpus for this workflow
+classModel = torch.load(classWeights, map_location=device) # need 2 gpus for this workflow
 classModel.eval()
 
 segResize = tio.Resize((128, 128, 200)) #resize for segmentation
@@ -80,7 +81,7 @@ root_dir="./"
 if torch.cuda.is_available():
      print("GPU enabled")
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 
 #trainSet = tio.datasets.RSNACervicalSpineFracture(RSNA_2022_PATH, add_segmentations=False)
 trainSet = RSNACervicalSpineFracture(RSNA_2022_PATH, add_segmentations=False)
