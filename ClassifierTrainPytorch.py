@@ -54,7 +54,7 @@ loss_fn = nn.BCEWithLogitsLoss(reduction='none')
 root_dir="./"
 if torch.cuda.is_available():
      print("GPU enabled")
-device = torch.device('cuda:0,1' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 target_cols = ['C1', 'C2', 'C3',
                'C4', 'C5', 'C6', 'C7',
