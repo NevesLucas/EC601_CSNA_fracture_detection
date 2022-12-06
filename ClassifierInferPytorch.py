@@ -9,8 +9,12 @@ from sklearn.metrics import classification_report
 with open('config.json', 'r') as f:
     paths = json.load(f)
 
+
+if torch.cuda.is_available():
+     print("GPU enabled")
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-RSNA_2022_PATH    = paths["RSNA_2022_PATH"]
+RSNA_2022_PATH = paths["RSNA_2022_PATH"]
 cachedir = paths["CACHE_DIR"]
 segWeights = paths["seg_weights"]
 classWeights = paths["classifier_weights"]
@@ -78,20 +82,15 @@ preprocess = tio.Compose([
 
 root_dir="./"
 
-if torch.cuda.is_available():
-     print("GPU enabled")
-
-
-
 #trainSet = tio.datasets.RSNACervicalSpineFracture(RSNA_2022_PATH, add_segmentations=False)
 trainSet = RSNACervicalSpineFracture(RSNA_2022_PATH, add_segmentations=False)
 with torch.no_grad():
     predicted = []
     actual = []
 
-    for classifier_input,_ in zip(trainSet,range(0,2)):
+    for classifier_input in trainSet:
         # get original dims first
-#        classifier_input = preprocess(samples)
+        #classifier_input = preprocess(samples)
         logits = classModel(classifier_input.ct.data.unsqueeze(0))[0]
         gt = [classifier_input[target_col] for target_col in pred_cols]
         sig = nn.Sigmoid()
@@ -101,7 +100,7 @@ with torch.no_grad():
         predicted.append(multiclass_pred)
         actual.append(gt)
         print(multiclass_pred)
-    report = classification_report(predicted, actual, output_dict=False,
+    report = classification_report(predicted, actual, output_dict=True,
     target_names=pred_cols)
     print(report)
     df = pd.DataFrame(report).transpose()
