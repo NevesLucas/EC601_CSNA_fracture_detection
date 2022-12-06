@@ -10,7 +10,7 @@ from torch.optim import lr_scheduler
 from torch.utils.tensorboard import SummaryWriter
 import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
-from monai.networks.nets import DenseNet201
+from monai.networks.nets import DenseNet121
 from sklearn.metrics import classification_report
 import torch.cuda.amp as amp
 import torchio as tio
@@ -21,34 +21,6 @@ with open('config.json', 'r') as f:
 segWeights = paths["seg_weights"]
 cachedir = paths["CACHE_DIR"]
 memory = Memory(cachedir, verbose=0, compress=True)
-
-segModel = torch.load(segWeights, map_location="cpu")
-segModel.eval()
-segResize = tio.Resize((128, 128, 200)) #resize for segmentation
-classResize = tio.Resize((256,256,256))
-
-def boundingVolume(pred,original_dims):
-    #acquires the 3d bounding rectangular prism of the segmentation mask
-    indices = torch.nonzero(pred)
-    min_indices, min_val = indices.min(dim=0)
-    max_indices, max_val = indices.max(dim=0)
-    return (min_indices[1].item(), original_dims[0]-max_indices[1].item(),
-            min_indices[2].item(), original_dims[1]-max_indices[2].item(),
-            min_indices[3].item(), original_dims[2]-max_indices[3].item())
-
-def cropData(dataElement):
-    downsampled = segResize(dataElement)
-    originalSize = dataElement[0].size()
-    rescale = tio.Resize(originalSize)
-    mask = segModel(downsampled.unsqueeze(0))
-    mask = torch.argmax(mask, dim=1)
-    mask = rescale(mask)
-    bounding_prism = boundingVolume(mask,originalSize)
-    crop = tio.Crop(bounding_prism)
-    cropped = crop(dataElement)
-    return classResize(cropped)
-
-smartCrop = tio.Lambda(cropData,types_to_apply=[tio.INTENSITY])
 
 def cacheFunc(data, indexes):
 
@@ -82,7 +54,7 @@ loss_fn = nn.BCEWithLogitsLoss(reduction='none')
 root_dir="./"
 if torch.cuda.is_available():
      print("GPU enabled")
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:0,1' if torch.cuda.is_available() else 'cpu')
 
 target_cols = ['C1', 'C2', 'C3',
                'C4', 'C5', 'C6', 'C7',
@@ -108,14 +80,14 @@ def competiton_loss_row_norm(y_hat, y):
 
 dataset = kaggleDataLoader.KaggleDataLoader()
 
-train, val = dataset.loadDatasetAsClassifier(train_aug=smartCrop)
+train, val = dataset.loadDatasetAsClassifier()
 
 train = cachingDataset(train)
 val = cachingDataset(val)
 train_loader = DataLoader(
-    train, batch_size=1, shuffle=True, prefetch_factor=8, persistent_workers=True, drop_last=True, num_workers=20)
+    train, batch_size=2, shuffle=True, prefetch_factor=8, persistent_workers=True, drop_last=True, num_workers=16)
 val_loader = DataLoader(
-    val, batch_size=1, num_workers=20)
+    val, batch_size=1, num_workers=16)
 
 # train_loader = DataLoader(
 #     train, batch_size=1, shuffle=True, num_workers=0)
@@ -123,7 +95,9 @@ val_loader = DataLoader(
 #     val, batch_size=1, num_workers=0)
 
 N_EPOCHS = 200
-model = DenseNet201(spatial_dims=3, in_channels=1, out_channels=8).to(device)
+model = DenseNet121(spatial_dims=3, in_channels=1, out_channels=8).to(device)
+model = nn.DataParallel(model)
+model.to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), 1e-5)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
@@ -151,7 +125,6 @@ for epoch in tqdm(range(N_EPOCHS)):
         labels = torch.FloatTensor([[batch[target_col][line] for target_col in target_cols] for line in range(0,len(batch['C1']))])
         imgs = imgs.to(device)
         labels = labels.to(device)
-
 
         # Forward pass
         with amp.autocast(dtype=torch.float16):
@@ -212,7 +185,7 @@ for epoch in tqdm(range(N_EPOCHS)):
             f'Epoch {epoch + 1}/{N_EPOCHS}, loss {loss_acc / train_count:.5f}, val_loss {val_loss_acc / valid_count:.5f}')
 
     # Save model (& early stopping)
-    torch.save(model, str("classifier_DenseNet201_" + str(epoch)+".pt"))
+    torch.save(model, str("classifier__dist_DenseNet121_" + str(epoch)+".pt"))
 
 writer.close()
 print('')
