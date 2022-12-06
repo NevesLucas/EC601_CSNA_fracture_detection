@@ -83,9 +83,10 @@ dataset = kaggleDataLoader.KaggleDataLoader()
 train, val = dataset.loadDatasetAsClassifier()
 
 train = cachingDataset(train)
-val = cachingDataset(val)
+
 train_loader = DataLoader(
     train, batch_size=8, shuffle=True, prefetch_factor=16, persistent_workers=True, drop_last=True, num_workers=24)
+
 val_loader = DataLoader(
     val, batch_size=4, num_workers=24)
 
@@ -95,7 +96,7 @@ val_loader = DataLoader(
 #     val, batch_size=1, num_workers=0)
 
 N_EPOCHS = 500
-model = DenseNet201(spatial_dims=3, in_channels=1, out_channels=8).to(device)
+model = DenseNet201(spatial_dims=3, in_channels=1, out_channels=2).to(device)
 model = nn.DataParallel(model)
 model.to(device)
 
