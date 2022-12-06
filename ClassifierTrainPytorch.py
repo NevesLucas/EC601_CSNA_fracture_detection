@@ -10,7 +10,7 @@ from torch.optim import lr_scheduler
 from torch.utils.tensorboard import SummaryWriter
 import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
-from monai.networks.nets import DenseNet121
+from monai.networks.nets import DenseNet201
 from sklearn.metrics import classification_report
 import torch.cuda.amp as amp
 import torchio as tio
@@ -85,9 +85,9 @@ train, val = dataset.loadDatasetAsClassifier()
 train = cachingDataset(train)
 val = cachingDataset(val)
 train_loader = DataLoader(
-    train, batch_size=2, shuffle=True, prefetch_factor=8, persistent_workers=True, drop_last=True, num_workers=16)
+    train, batch_size=8, shuffle=True, prefetch_factor=16, persistent_workers=True, drop_last=True, num_workers=24)
 val_loader = DataLoader(
-    val, batch_size=1, num_workers=16)
+    val, batch_size=4, num_workers=24)
 
 # train_loader = DataLoader(
 #     train, batch_size=1, shuffle=True, num_workers=0)
@@ -95,7 +95,7 @@ val_loader = DataLoader(
 #     val, batch_size=1, num_workers=0)
 
 N_EPOCHS = 200
-model = DenseNet121(spatial_dims=3, in_channels=1, out_channels=8).to(device)
+model = DenseNet201(spatial_dims=3, in_channels=1, out_channels=8).to(device)
 model = nn.DataParallel(model)
 model.to(device)
 
@@ -185,7 +185,7 @@ for epoch in tqdm(range(N_EPOCHS)):
             f'Epoch {epoch + 1}/{N_EPOCHS}, loss {loss_acc / train_count:.5f}, val_loss {val_loss_acc / valid_count:.5f}')
 
     # Save model (& early stopping)
-    torch.save(model, str("classifier__dist_DenseNet121_" + str(epoch)+".pt"))
+    torch.save(model, str("classifier__dist_DenseNet201_" + str(epoch)+".pt"))
 
 writer.close()
 print('')
