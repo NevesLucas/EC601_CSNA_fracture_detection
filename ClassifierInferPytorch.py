@@ -42,7 +42,7 @@ with torch.no_grad():
     predicted_logits = []
     actual = []
 
-    for classifier_input in tqdm(trainSet):
+    for classifier_input, _ in zip(trainSet,range(0,10)):
         # get original dims first
         #classifier_input = preprocess(samples)
         logits = classModel(classifier_input.ct.data.unsqueeze(0).to(device)).cpu()[0]
@@ -86,7 +86,7 @@ with torch.no_grad():
         ele = float(input())
         thresholds.append(ele)  # adding the element
 
-    predicted = [(element > threshold)*1 for element,threshold in zip(predicted_logits,thresholds)]
+    predicted = [[(ele > threshold)*1 for ele,threshold in zip(element, thresholds)] for element in predicted_logits]
     report = classification_report(predicted, actual, output_dict=True,
                                                       target_names=pred_cols)
 
