@@ -16,3 +16,4 @@ pandas
 monai
 seaborn
 classification-report
+plotly
