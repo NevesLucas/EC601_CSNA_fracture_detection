@@ -79,9 +79,14 @@ with torch.no_grad():
 
     fig.write_html("classifier_roc_plot.html")
     fig.show()
-    print("choose threshold for report")
-    threshold = float(input())
-    predicted = [(element > threshold)*1 for element in predicted_logits]
+    print("choose thresholds for report")
+    thresholds = []
+    for label in pred_cols:
+        print(label)
+        ele = float(input())
+        thresholds.append(ele)  # adding the element
+
+    predicted = [(element > threshold)*1 for element,threshold in zip(predicted_logits,thresholds)]
     report = classification_report(predicted, actual, output_dict=True,
                                                       target_names=pred_cols)
 
