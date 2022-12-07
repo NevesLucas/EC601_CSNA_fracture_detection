@@ -10,7 +10,7 @@ from torch.optim import lr_scheduler
 from torch.utils.tensorboard import SummaryWriter
 import pandas as pd
 from monai.data import decollate_batch, DataLoader,Dataset,ImageDataset
-from monai.networks.nets import DenseNet201
+from monai.networks.nets import DenseNet121
 from sklearn.metrics import classification_report
 import torch.cuda.amp as amp
 import torchio as tio
@@ -85,10 +85,10 @@ train, val = dataset.loadDatasetAsClassifier()
 train = cachingDataset(train)
 
 train_loader = DataLoader(
-    train, batch_size=8, shuffle=True, prefetch_factor=16, persistent_workers=True, drop_last=True, num_workers=24)
+    train, batch_size=16, shuffle=True, prefetch_factor=16, persistent_workers=True, drop_last=True, num_workers=32)
 
 val_loader = DataLoader(
-    val, batch_size=4, num_workers=24)
+    val, batch_size=8, num_workers=32)
 
 # train_loader = DataLoader(
 #     train, batch_size=1, shuffle=True, num_workers=0)
@@ -96,11 +96,11 @@ val_loader = DataLoader(
 #     val, batch_size=1, num_workers=0)
 
 N_EPOCHS = 500
-model = DenseNet201(spatial_dims=3, in_channels=1, out_channels=8).to(device)
+model = DenseNet121(spatial_dims=3, in_channels=1, out_channels=8).to(device)
 model = nn.DataParallel(model)
 model.to(device)
 
-optimizer = torch.optim.Adam(model.parameters(), 1e-5)
+optimizer = torch.optim.Adam(model.parameters(), 1e-4)
 scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
 scaler = amp.GradScaler()
 
@@ -186,7 +186,7 @@ for epoch in tqdm(range(N_EPOCHS)):
             f'Epoch {epoch + 1}/{N_EPOCHS}, loss {loss_acc / train_count:.5f}, val_loss {val_loss_acc / valid_count:.5f}')
 
     # Save model (& early stopping)
-    torch.save(model, str("classifier__dist_DenseNet201_" + str(epoch)+".pt"))
+    torch.save(model, str("classifier_dist_DenseNet121_" + str(epoch)+".pt"))
 
 writer.close()
 print('')
@@ -194,7 +194,7 @@ print('Training complete!')
 # log loss
 data = {'val_loss':val_loss_hist,'loss':loss_hist}
 df = pd.DataFrame(data=data)
-df.to_csv("results.csv", sep='\t')
+df.to_csv("train_log_densenet121.csv", sep='\t')
 
 # Plot loss
 plt.figure(figsize=(10, 5))
@@ -204,5 +204,5 @@ plt.title('Competition metric')
 plt.xlabel('Epoch')
 plt.ylabel('Loss')
 plt.legend()
-plt.savefig("train_result.png")
+plt.savefig("train_result_densenet121.png")
 plt.show()
