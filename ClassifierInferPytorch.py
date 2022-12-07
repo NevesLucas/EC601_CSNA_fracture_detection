@@ -42,7 +42,7 @@ with torch.no_grad():
     predicted_logits = []
     actual = []
 
-    for classifier_input, _ in zip(trainSet,range(0,10)):
+    for classifier_input in tqdm(trainSet):
         # get original dims first
         #classifier_input = preprocess(samples)
         logits = classModel(classifier_input.ct.data.unsqueeze(0).to(device)).cpu()[0]
