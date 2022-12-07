@@ -42,7 +42,7 @@ with torch.no_grad():
     predicted_logits = []
     actual = []
 
-    for classifier_input in tqdm(trainSet):
+    for classifier_input, _ in zip(trainSet,range(0,10)):
         # get original dims first
         #classifier_input = preprocess(samples)
         logits = classModel(classifier_input.ct.data.unsqueeze(0).to(device)).cpu()[0]
@@ -52,21 +52,23 @@ with torch.no_grad():
         overall = preds.numpy().squeeze()
         predicted_logits.append(overall)
         actual.append(gt)
-    fpr, tpr, thresholds = roc_curve(column(actual, -1), column(predicted_logits, -1))
-    fig = go.Figure(data=[go.Scatter3d(
+
+    scatterPlots = []
+    for i in range(0,len(pred_cols)):
+        fpr, tpr, thresholds = roc_curve(column(actual, i), column(predicted_logits, i))
+        scatterPlots.append(go.Scatter3d(
         x=fpr,
         y=tpr,
         z=thresholds,
+        name=pred_cols[i],
+        showlegend=True,
         marker=dict(
-            size=12,
-            color=thresholds,  # set color to an array/list of desired values
-            colorscale='Viridis',  # choose a colorscale
-            opacity=0.8
+            size=5
         ),
         line=dict(
-        color='darkblue',
         width=2)
-    )])
+    ))
+    fig = go.Figure(data=scatterPlots)
     fig.update_layout(scene=dict(
         xaxis_title='False Positive Rate',
         yaxis_title='True Positive Rate',
