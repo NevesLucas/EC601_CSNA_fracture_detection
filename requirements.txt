@@ -13,3 +13,7 @@ torchio
 pydicom
 joblib
 pandas
+monai
+seaborn
+classification-report
+plotly

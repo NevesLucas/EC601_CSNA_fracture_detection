@@ -28,6 +28,14 @@ import torchio as tio
 with open('config.json', 'r') as f:
     paths = json.load(f)
 
+cachedir = paths["CACHE_DIR"]
+modelWeights = paths["seg_weights"]
+
+segModel = torch.load(modelWeights, map_location="cpu") # need 2 gpus for this workflow
+segModel.eval()
+segResize = tio.Resize((128, 128, 200)) #resize for segmentation
+classResize = tio.Resize((256,256,256))
+
 def boundingVolume(pred,original_dims):
     #acquires the 3d bounding rectangular prism of the segmentation mask
     indices = torch.nonzero(pred)
@@ -39,9 +47,19 @@ def boundingVolume(pred,original_dims):
             min_indices[2].item(), original_dims[1]-max_indices[2].item(),
             min_indices[3].item(), original_dims[2]-max_indices[3].item())
 
+def cropData(dataElement):
+    downsampled = segResize(dataElement)
+    originalSize = dataElement[0].size()
+    rescale = tio.Resize(originalSize)
+    mask = segModel(downsampled.unsqueeze(0))
+    mask = torch.argmax(mask, dim=1)
+    mask = rescale(mask)
+    bounding_prism = boundingVolume(mask,originalSize)
+    crop = tio.Crop(bounding_prism)
+    cropped = crop(dataElement)
+    return classResize(cropped)
 
-cachedir = paths["CACHE_DIR"]
-modelWeights = paths["seg_weights"]
+smartCrop = tio.Lambda(cropData)
 
 root_dir="./"
 
@@ -51,44 +69,16 @@ if torch.cuda.is_available():
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 dataset = kaggleDataLoader.KaggleDataLoader()
-train, val = dataset.loadDatasetAsClassifier(trainPercentage = 1.0)
 
-model = torch.load(modelWeights, map_location=device)
-model.eval()
-
-resize = tio.Resize((128, 128, 200)) #resize for segmentation
+train, val = dataset.loadDatasetAsClassifier(trainPercentage = 1.0, train_aug=smartCrop)
 
 basic_sample = train[10]
 # get original dims first
-original_dims = basic_sample.spatial_shape
-downsampled = resize(basic_sample)
-
-reverseTransform = tio.Resize(original_dims)
-
-prediction = model(downsampled.ct.data.unsqueeze(0) ) #get mask for current subject
-
-binary_mask = torch.argmax(prediction, dim=1) # binarize
 
 fig, ax = plt.subplots()
 ims = []
-for sagittal_slice_tensor in binary_mask[0]:
-    im = ax.imshow(sagittal_slice_tensor.detach().numpy(), cmap=plt.cm.bone, animated=True)
-    ims.append([im])
+for sagittal_slice_tensor in basic_sample.ct.data[0]:
 
-ani = animation.ArtistAnimation(fig, ims, interval=50, blit=True,
-                                repeat_delay=1000)
-plt.show()
-
-binary_mask = reverseTransform(binary_mask) # convert mask back to original image resolution
-bounding_prism = boundingVolume(binary_mask,original_dims) # find the bounding area of the segmentation
-
-crop = tio.Crop(bounding_prism)
-cropped_original = crop(basic_sample) # crop the original data to fit the segmentation.
-
-
-fig, ax = plt.subplots()
-ims = []
-for sagittal_slice_tensor in cropped_original.ct.data[0]:
     im = ax.imshow(sagittal_slice_tensor.detach().numpy(), animated=True)
     ims.append([im])
 
