@@ -69,6 +69,7 @@ if torch.cuda.is_available():
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 dataset = kaggleDataLoader.KaggleDataLoader()
+
 train, val = dataset.loadDatasetAsClassifier(trainPercentage = 1.0, train_aug=smartCrop)
 
 basic_sample = train[10]
@@ -77,6 +78,7 @@ basic_sample = train[10]
 fig, ax = plt.subplots()
 ims = []
 for sagittal_slice_tensor in basic_sample.ct.data[0]:
+
     im = ax.imshow(sagittal_slice_tensor.detach().numpy(), animated=True)
     ims.append([im])
 

@@ -108,8 +108,8 @@ class KaggleDataLoader:
         """
         prepare full dataset for training
         """
-
         trainSet = RSNACervicalSpineFracture(RSNA_2022_PATH, add_segmentations=False)
+
         num_subjects = len(trainSet)
         num_train = int(trainPercentage*num_subjects)
         num_val = num_subjects - num_train
@@ -166,6 +166,7 @@ class KaggleDataLoader:
         num_train = int(trainPercentage*num_subjects)
         num_val = num_subjects - num_train
         train_set, val_set = torch.utils.data.random_split(trainSet,[num_train,num_val])
+
         if train_aug is not None:
             preprocess = tio.Compose([
                 preprocess,
